@@ -1,2 +1,78 @@
 {
+  "elysiajs": {
+    "slug": "elysiajs",
+    "name": "ElysiaJS"
+  },
+  "bun": {
+    "slug": "bun",
+    "name": "Bun"
+  },
+  "java": {
+    "slug": "java",
+    "name": "Java"
+  },
+  "typescript": {
+    "slug": "typescript",
+    "name": "TypeScript"
+  },
+  "react": {
+    "slug": "react",
+    "name": "React"
+  },
+  "uncategorized": {
+    "slug": "uncategorized",
+    "name": "Uncategorized"
+  },
+  "nextjs": {
+    "slug": "nextjs",
+    "name": "Next.js"
+  },
+  "postgresql": {
+    "slug": "postgresql",
+    "name": "PostgreSQL"
+  },
+  "docker": {
+    "slug": "docker",
+    "name": "Docker"
+  },
+  "wireguard": {
+    "slug": "wireguard",
+    "name": "WireGuard"
+  },
+  "git": {
+    "slug": "git",
+    "name": "Git"
+  },
+  "github": {
+    "slug": "github",
+    "name": "GitHub"
+  },
+  "cloudflare": {
+    "slug": "cloudflare",
+    "name": "Cloudflare"
+  },
+  "spring": {
+    "slug": "spring",
+    "name": "Spring"
+  },
+  "bittorrent": {
+    "slug": "bittorrent",
+    "name": "BitTorrent"
+  },
+  "go": {
+    "slug": "go",
+    "name": "Go"
+  },
+  "vscode": {
+    "slug": "vscode",
+    "name": "VSCode"
+  },
+  "ubuntu": {
+    "slug": "ubuntu",
+    "name": "Ubuntu"
+  },
+  "ssh": {
+    "slug": "ssh",
+    "name": "SSH"
+  }
 }
