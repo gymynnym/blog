@@ -1,0 +1,366 @@
+---
+title: '[Best Practice] ElysiaJS 편'
+description: 'Best Practice ElysiaJS 편 들어가며 이번 아티클은 개인적으로 토이 프로젝트에 ElysiaJS를 적용하며 얻은 경험들을 바탕으로, 저만의 Best Practice 문서를 작성하려고 합니다. 이 아티클은 ElysiaJS 공식 문서에서 이미 제공되고 있는 Best Pr...'
+thumbnail: https://assets.akuk.in/blog/thumbnails/%5BBest%20Practice%5D%20ElysiaJS%20%ED%8E%B8.png
+publishedAt: '2026-04-05T23:27:50.943435'
+updatedAt: '2026-04-24T20:50:15.995493+00:00'
+topics: ['typescript', 'elysiajs']
+author: 'gymynnym'
+draft: false
+---
+
+# [Best Practice] ElysiaJS 편
+
+## 들어가며
+
+이번 아티클은 개인적으로 토이 프로젝트에 ElysiaJS를 적용하며 얻은 경험들을 바탕으로, 저만의 Best Practice 문서를 작성하려고 합니다.
+
+이 아티클은 ElysiaJS 공식 문서에서 이미 제공되고 있는 [Best Practice](https://elysiajs.com/essential/best-practice.html) 문서의 개념을 바탕으로 하며, 개인적인 개발 경험을 녹여 더 확장된 버전으로 설명하려고 합니다.
+
+## 프로젝트 생성
+
+```bash
+$ bun create elysia <project-name>
+$ cd <project-name>
+
+# optional
+$ bun add -D prettier
+```
+
+[`bun create`](https://bun.com/docs/runtime/templating/create) 명령어를 통해 프로젝트 생성 후, 팀 규칙이나 개인 취향에 맞게 포매터와 린터 등을 추가로 구성합니다.
+
+## 폴더 구조
+
+> [ElysiaJS - Folder Structure](https://elysiajs.com/essential/best-practice.html#folder-structure) 문서에 따르면 ElysiaJS는 폴더 구조에 대한 특별한 입장이 없기에, 개발자가 자유롭게 정의할 수 있습니다.
+
+### 1. `src/index.ts` : 진입점
+
+`src/index.ts` 파일은 ElysiaJS 프로젝트의 진입점이며, `package.json`에서 이를 확인하실 수 있습니다:
+
+```json
+{
+  ...
+  "scripts": {
+    ...
+    "dev": "bun run --watch src/index.ts"
+  },
+  ...
+  "module": "src/index.js"
+}
+```
+
+`src/index.ts` 파일은 다음과 같이 생성됩니다:
+
+```ts
+import { Elysia } from 'elysia';
+
+const app = new Elysia().get('/', () => 'Hello Elysia').listen(3000);
+
+console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
+```
+
+이 코드는 다음과 같은 역할을 가집니다:
+
+1. `Elysia` 객체를 생성
+2. `GET /` 에 대한 REST API를 정의
+3. 웹 서버의 시작을 의미하는 `listen` 함수를 수행
+
+### 2. `src/modules` : 모듈
+
+```
+src
+└── modules
+    ├── auth
+    │   ├── index.ts
+    │   ├── message.ts
+    │   ├── model.ts
+    │   └── service.ts
+    ├── common
+    │   ├── error.ts
+    │   └── model.ts
+    └── user
+        └── repository.ts
+```
+
+이번 프로젝트는 **기능/도메인 기반 구조**를 선택했습니다. 이는 관련된 코드(서비스, 모델 등)를 하나의 디렉토리로 묶어 응집도를 높이고, 기능 단위로 독립적인 확장이 가능하도록 하기 위함입니다.
+
+따라서 `src/modules`의 하위 폴더명은 **기능명 또는 도메인명**을 사용하며, 각 도메인 별로 필요한 레이어를 기반으로 코드 파일을 나누는 구조를 선택했습니다.
+
+자주 사용되는 레이어는 다음과 같습니다:
+
+- `index` : 외부 Elysia 앱에서 `use` 함수로 추가할 수 있는 모듈 형태의 Elysia 앱
+- `service` : 현 모듈에 대한 서비스 레이어. 비지니스 로직을 담당.
+- `repository` : 현 모듈에 대한 DB 조작 레이어.
+- `model` : 현 모듈에서 사용하는 데이터 구조. 유효성 검사를 담당.
+- `message` : 현 모듈에서 사용하는 메시지 상수.
+
+### 3. `src/plugins` : 플러그인
+
+```
+src
+└── plugins
+    ├── database
+    │   ├── index.ts
+    │   └── schema.ts
+    ├── jwt
+    │   ├── index.ts
+    │   └── model.ts
+    └── response
+        ├── index.ts
+        └── utils.ts
+```
+
+모듈은 특정 도메인의 비지니스 로직을 가지는 반면, 플러그인은 여러 모듈에서 공통으로 사용하는 기능이나 리소스를 제공하는 목적을 가집니다.
+
+단, 플러그인도 모듈과 마찬가지로 하위 폴더명은 **기능명 또는 도메인명**을 사용하며, `index` 파일은 외부 Elysia 앱에서 `use` 함수로 추가할 수 있는 모듈 형태의 Elysia 앱을 의미합니다.
+
+### 4. `src/handlers` : 핸들러
+
+```
+src
+└── handlers
+    └── error
+        └── index.ts
+```
+
+핸들러는 플러그인과 달리 컨텍스트를 확장하는 목적이 아닌, `onRequest`, `onError` 등 라이프사이클 이벤트를 핸들링하는 목적을 가집니다.
+
+현 예제의 `error/index.ts`는 `onError` 함수를 통한, 에러 핸들링 기능을 포함하는 코드입니다.
+
+### 번외: 패스 별칭
+
+```json
+// tsconfig.json
+{
+  "compilerOptions": {
+    ...
+    "paths": {
+      "@/*": ["./src/*"],
+      "@mo/*": ["./src/modules/*"],
+      "@pl/*": ["./src/plugins/*"]
+    }
+  ...
+}
+```
+
+`tsconfig.json`에서 `paths` 설정으로 각 폴더에 대한 별칭을 설정할 수 있습니다. 이를 사용하면 상대 경로가 아닌 절대 경로에서 모듈을 import하는 것이 편리해집니다:
+
+```ts
+import { AuthModule } from '../../../modules/auth'; // 설정 전
+import { AuthModule } from '@mo/auth'; // 설정 후
+```
+
+## 레이어
+
+### 1. 서비스
+
+ElysiaJS에는 두 가지 유형의 서비스 레이어 구현법이 존재합니다: - [출처](https://elysiajs.com/essential/best-practice.html#service)
+
+1. 요청에 의존하지 않는 서비스 (권장)
+2. 요청에 의존하는 서비스
+
+기본적으로 서비스가 요청 컨텍스트에 직접적으로 접근하지 않는다면, 요청에 의존하지 않는 정적 클래스 또는 함수로 구현하는 것이 권장됩니다.
+
+서비스는 `abstract 클래스 + static 메서드` 형태로 구현하는 것이 효율적이며, 이는 상태를 가지지 않는 순수한 로직을 유지하면서, 의존성을 명시적으로 주입받도록 강제할 수 있기 때문입니다.
+
+서비스의 예시는 다음과 같습니다:
+
+```ts
+interface AuthServiceTool {
+  db: Database;
+  jwt: JWTTool;
+}
+
+export abstract class AuthService {
+  static async join(body: AuthModel.JoinRequest, { db, jwt }: AuthServiceTool) { ... }
+
+  static async login(body: AuthModel.LoginRequest, { db, jwt }: AuthServiceTool) { ... }
+}
+```
+
+`ServiceTool` 인터페이스를 따로 분리하여 전달 받게한 이유는 유틸리티 객체가 많아질 수록, 코드의 복잡성이 높아지기 때문입니다.
+
+만약, ServiceTool 인터페이스 내부의 모든 툴이 필요 없는 메서드의 경우 `Omit` 또는 `Pick` 인터페이스를 사용해 리소스를 절약할 수 있습니다.
+
+### 2. 모델
+
+Elysia는 모델 또는 DTO의 유효성 검사 라이브러리로 `zod`, `Valibot` 등 다양한 라이브러리도 사용 가능하지만, 성능 상 ElysiaJS의 TypeBox 래퍼 `t`가 권장됩니다.
+
+```ts
+import { UnwrapSchema, t } from 'elysia';
+
+export namespace AuthModel {
+  const username = t.String({
+    minLength: 3,
+    maxLength: 20,
+    trim: true,
+  });
+  const password = t.String({
+    minLength: 6,
+    maxLength: 32,
+    pattern: '^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{6,}$',
+  });
+  const age = t.Number({
+    minimum: 18,
+    maximum: 120,
+  });
+
+  export const joinRequest = t.Object({ username, password, age });
+  export type JoinRequest = UnwrapSchema<typeof joinRequest>;
+
+  export const loginRequest = t.Object({ username, password });
+  export type LoginRequest = UnwrapSchema<typeof loginRequest>;
+}
+```
+
+`t.Object`를 통해 검증 모델을 생성 가능하며, `UnwrapSchema<typeof model>`을 통해 모델 타입을 추출할 수 있으며, 이는 런타임 검증과 타입 추론을 동시에 만족할 수 있어 편리합니다.
+
+이렇게 생성된 모델은 컨트롤러에서 다음과 같이 사용될 수 있습니다:
+
+```ts
+...
+  .post(
+    '/join',
+    async ({ body, db, jwt, set, created }) => {
+      const { token } = await AuthService.join(body, { db, jwt });
+      set.headers = { Authorization: `Bearer ${token}` };
+      return created(AuthMessage.JOIN_SUCCESS);
+    },
+    {
+      body: AuthModel.joinRequest,
+      response: {
+        // 자동 타입 추론
+        201: CommonModel.messageResponse,
+        400: CommonModel.fieldErrorsResponse,
+        409: CommonModel.fieldErrorsResponse,
+      },
+    }
+  )
+...
+```
+
+## 개인적으로 사용하는 실전 패턴
+
+### 1. 컨텍스트 확장
+
+> ElysiaJS에서 **컨텍스트(Context)** 는 각 요청마다 생성되는 객체로, body, query, params, headers 등의 요청 데이터와 함께, 애플리케이션에서 확장한 값들이 함께 담겨있습니다.
+
+`state`, `decorate`, `derive`, `resolve` 모두 **컨텍스트(Context)를 확장**하는 역할을 가집니다.
+
+#### `state`
+
+`state`는 Elysia 앱 전체에서 전역적으로 사용 가능한 객체를 할당합니다. 이 값은 초기화 이후에도 변경될 수 있습니다.
+
+#### `decorate`
+
+`decorate`는 추가 속성을 컨텍스트에 할당합니다. 이는 상수 또는 read-only 객체(싱글톤)를 추가할 때 사용합니다.
+
+> `state`처럼 값을 변경할 수는 있지만 권장되지 않습니다!
+
+#### `derive`
+
+`derive`는 컨텍스트에 이미 존재하는 값을 기반으로, 새로운 프로퍼티를 생성하여 추가합니다.
+
+> 단, 타입 안정성을 보장하지 않아 필요한 경우 `resolve` 사용이 권장됩니다.
+
+#### `resolve`
+
+`resolve`는 `derive`의 타입 안정성을 보장하는 버전입니다.
+
+`resolve`는 라이프사이클 중 유효성 검사 이후 단계에서 실행되기에, body, headers 등 요청 데이터에 대한 타입 안정성이 보장됩니다.
+
+따라서 일반적으로, `derive` 대신 `resolve`를 사용하는 것이 권장됩니다.
+
+#### 결론
+
+결론적으로, 저는 다음과 같은 기준으로 컨텍스트 확장 기능을 사용하고 있습니다 :
+
+- 요청과 무관한 전역 값을 컨텍스트에 등록할 때 -> `state`
+- 상수 또는 싱글톤 객체를 컨텍스트에 등록할 때 -> `decorate`
+- 이미 존재하는 값을 추출하여, 새로운 값을 생성할 때 -> `resolve`
+- 타입 안정성이 보장되지 않기에, 거의 사용하지 않음 -> `derive`
+
+### 2. 데이터베이스 객체 접근법
+
+ElysiaJS는 프레임워크지만, DX(Developer eXperience)을 강조하기에 코드 스타일을 명확히 명시하지 않고 있습니다. 단, ElysiaJS에서 전역적으로 사용하는 상수 또는 객체에 대해서는 `decorate`를 사용하는 것이 좋은 패턴이라고 생각합니다.
+
+```ts
+// src/plugins/database/index.ts
+const db = drizzle(...);
+export const DatabasePlugin = new Elysia({ name: 'database' }).decorate('db', db);
+
+// src/modules/auth/index.ts
+export const AuthModule = new Elysia({
+  name: 'auth',
+  prefix: '/auth',
+})
+  ...
+  .use(DatabasePlugin)
+  .post('/join', async ({ db, ... }) => ...)
+```
+
+따라서 데이터베이스 객체를 단순 export/import가 아닌, `decorate`를 통해 컨텍스트에 등록한 뒤, 각 라우터에서 꺼내어 서비스 레이어에 전달하는 방식을 사용합니다. 또한, 서비스 레이어에 전달할 때는 위에서 설명한 `ServiceTool` 인터페이스에 포함해 깔끔하게 전달하도록 하고 있습니다.
+
+### 3. 레포지토리 레이어 - Drizzle ORM 기준
+
+```ts
+import { Database, schema, Transaction } from '@pl/database/schema';
+import { eq } from 'drizzle-orm';
+
+const { user } = schema;
+
+type UserRepositoryClient = Pick<Database, 'select' | 'insert'> | Pick<Transaction, 'select' | 'insert'>;
+
+export class UserRepository {
+  constructor(private readonly db: UserRepositoryClient) {}
+
+  async findByEmail(email: string) {
+    const [foundUser] = await this.db.select().from(user).where(eq(user.email, email));
+    return foundUser;
+  }
+
+  async existsById(id: number) {
+    const [foundUser] = await this.db.select().from(user).where(eq(user.id, id));
+    return !!foundUser;
+  }
+
+  async save(value: typeof user.$inferInsert) {
+    const [savedUser] = await this.db.insert(user).values(value).returning();
+    return savedUser;
+  }
+}
+```
+
+이는 간단한 Drizzle ORM을 활용하는 User 도메인의 레포지토리 코드입니다. 생성자에서 `db` 객체를 전달 받으며, 이를 사용해서 Drizzle ORM을 조작합니다.
+
+이는, 서비스의 각 메서드에서 필요한 경우 생성하여 사용할 수 있으며, 사용 예시는 다음과 같습니다:
+
+```ts
+...
+export abstract class AuthService {
+  static async join(body: AuthModel.JoinRequest, { db, jwt, password }: AuthServiceTool) {
+    return db.transaction(async (tx) => {
+      const userRepository = new UserRepository(tx);
+      const existinguser = await userRepository.findByEmail(body.email);
+      ...
+      const savedUser = await userRepository.save(newUser);
+      ...
+    });
+  }
+...
+}
+```
+
+여기서, `resolve`를 통해 UserRepository를 컨텍스트 확장값으로 등록하지 않는 이유는 모듈에 속한 특정 라우터가 UserRepository를 사용하지 않을 수도 있으며, 이 경우 불필요한 객체 생성 및 컨텍스트 확장이 발생하기 떄문입니다.
+
+따라서 저는 필요한 경우에만 서비스 레이어에서 생성하는 방법을 권장합니다.
+
+> ElysiaJS의 [Sucrose: 정적 코드 분석기](https://elysiajs.com/internal/jit-compiler.html#static-code-analysis-sucrose)가 이런 문제를 해결줄 거라고 생각했었지만, 아니었습니다 :(
+
+## 마치며
+
+ElysiaJS는 프레임워크지만, 개발 자유도가 높고 DX가 뛰어난 만큼, 프로젝트 초기 단계에서 명확한 구조와 규칙을 설계하는 것이 특히 중요하다고 느꼈습니다.
+
+따라서 여유로운 주말을 맞아, 지금까지의 ElysiaJS의 개발 경험을 하나의 문서로 정리하고 나니, 개인적으로 개념이 재정립되고 앞으로의 학습 방향성이 한층 더 뚜렷해진 기분입니다.
+
+이후 Best Practice 프로젝트 개발이 완료되면, 레포지토리를 공개하여 여기에 링크를 남겨두겠습니다!

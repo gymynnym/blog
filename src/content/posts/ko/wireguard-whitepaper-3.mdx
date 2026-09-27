@@ -1,0 +1,70 @@
+---
+title: '송수신 흐름'
+description: '송수신 흐름 다음은 설명에서 사용될 암호키 라우팅 테이블 예시입니다. Interface Public Key Interface Private Key Listen --- --- --- HIgo...8ykw yAnz...fBmk 41414 Peer Public Key AllowedIPs...'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-13T15:27:02.917241'
+updatedAt: '2025-12-18T18:36:05.596350'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 3
+author: 'gymynnym'
+draft: false
+---
+
+# 송수신 흐름
+
+다음은 설명에서 사용될 암호키 라우팅 테이블 예시입니다.
+
+| Interface Public Key | Interface Private Key | Listen |
+| -------------------- | --------------------- | ------ |
+| `HIgo...8ykw`        | `yAnz...fBmk`         | 41414  |
+
+| Peer Public Key | AllowedIPs                       |
+| --------------- | -------------------------------- |
+| `xTIB...p8Dg`   | 10.192.122.3/32, 10.192.124.0/24 |
+| `TrMv...WXX0`   | 10.192.122.4/32, 192.168.0.0/16  |
+| `gN65...z6EA`   | 10.10.10.230/32                  |
+
+위 암호키 라우팅 테이블을 사용하는 `wg0`: WireGuard 가상 인터페이스의 패킷 송수신 흐름을 다음과 같습니다.
+
+## wg0로 패킷을 송신할 때
+
+어떤 IP 패킷이 출구 인터페이스로 `wg0`를 타게 되었을 때:
+
+1. 평문 패킷이 WireGuard 인터페이스 `wg0`에 **도달**
+2. 목적지 IP로 **peer 선택** (AllowedIPs 테이블 조회)
+   - 예) 패킷의 목적지 IP 주소(192.168.87.21)를 확인하고 AllowedIPs 테이블을 조회해 피어 선택(`TrMv...WXX0`)
+   - 매칭되는 peer가 없으면 drop (커널 관점에서는 ICMP "no route to host", 사용자 공간에서는 `-ENOKEY` 에러로 전달로 이어질 수 있음)
+3. 선택된 peer의 세션 키로 **암호화**
+   - 예) 선택된 피어(`TrMv...WXX0`)의 대칭 송신 암호화 키(symmetric sending encryption key)와 nonce counter를 사용하여, **ChaCha20-Poly1305**로 평문 패킷을 **암호화**
+   - **symmetric sending encryption key** : 핸드셰이크로 파생된 세션 대칭키 중 송신 방향 키
+   - **nonce counter** : 데이터 패킷마다 1씩 증가하는 메시지 번호로, **nonce로 사용되어 (키, nonce) 재사용을 막고** 리플레이(재전송) 패킷을 거름
+4. WireGuard **메시지 헤더**를, 암호화된 패킷 앞에 prepend
+5. UDP 패킷으로 캡슐화하여 상대 peer의 목적지로 **송신**
+   - 헤더 + 암호문
+   - 이때 목적지는 peer의 endpoint(외부 IP:port)
+   - endpoint는 설정되어 있거나, 최근에 **정상 인증된 수신 패킷의 outer source IP:port**로 갱신
+   - endpoint를 모르면 drop
+
+## wg0가 패킷을 수신할 때
+
+외부에서 UDP 포트 41414(listening port)로 패킷이 들어올 때:
+
+1. 정해진 UDP 포트(예: 41414)로 WireGuard 패킷 **수신**
+2. 헤더로 세션/peer를 찾고, **카운터 검증 + 인증/복호화 시도**
+   - 헤더 정보를 통해 "어느 peer의 어떤 세션인가"를 검색
+   - 메시지 카운터를 검증 리플레이 공격을 방지
+   - 해당 세션의 수신 키로 **인증(Poly1305) + 복호화 시도**
+   - peer를 못 찾거나 인증 실패하면 drop
+3. 인증에 성공 시, outer source IP:port로 **endpoint 갱신**
+4. 복호화된 내부 평문 패킷이 IP인지 확인 + AllowedIPs로 **출발지 검증**
+   - 복호화 결과가 IP 패킷이 아니면 drop
+   - IP 패킷이면, 평문 패킷의 source IP를 통해 AllowedIPs 테이블에서 "이 source IP라면 원래 어떤 peer로 라우팅되어야 하는가?"를 조회 후, 그 결과가 패킷을 보낸 peer와 일치하면 통과, 아니면 drop
+5. 검증된 패킷을 `wg0`의 receive queue에 추가
+
+## 왜 AllowedIPs를 "송신 라우팅"과 "수신 검증"에 같이 쓰는가?
+
+- **송신 시** : 목적지 IP -> 어떤 peer로 보낼지 결정
+- **수신 시** : 출발지 IP -> 원래 그 IP는 어떤 peer에서 와야 정상인지 검증
+
+이 방식은 결과적으로 IP와 peer가 1:1 매핑을 강제합니다. 그래서 어떤 IP에서 패킷이 들어오면, 그 IP로 답장을 보낼 때 항상 같은 peer로 나가게 보장됩니다. (백서에서는 이를 "reverse-path filtering 비슷한 효과"라고 설명합니다.)

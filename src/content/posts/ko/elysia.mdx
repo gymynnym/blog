@@ -1,0 +1,98 @@
+---
+title: ElysiaJS - 빠른 백엔드 프레임워크
+description: Bun과 ElysiaJS가 빠른 이유를 라우팅, JIT 컴파일, 정적 코드 분석의 관점에서 살펴봅니다.
+thumbnail: https://assets.akuk.in/blog/thumbnails/ElysiaJS_%20%EB%B9%A0%EB%A5%B8%20%EB%B0%B1%EC%97%94%EB%93%9C%20%ED%94%84%EB%A0%88%EC%9E%84%EC%9B%8C%ED%81%AC.png
+publishedAt: 2026-02-09
+updatedAt: 2026-02-15T17:02:01.605731+00:00
+topics:
+  - elysiajs
+  - bun
+draft: false
+---
+
+# ElysiaJS: 빠른 백엔드 프레임워크
+
+## 들어가며
+
+![elysia_v.webp](https://assets.akuk.in/blog/in-content/1770646599350_elysia_v.webp '귀여운 버전의 ElysiaJS 로고')
+
+[ElysiaJS](https://elysiajs.com/)는 Bun 생태계에서 가장 널리 사용되는 백엔드 프레임워크로 높은 성능과 효율적이며 안정적인 타입 시스템을 자랑합니다. 또한, 개발자 경험이 굉장히 좋은 편이며 개인적으로도 JS/TS 기반 웹 토이프로젝트 개발 시, 이런 ElysiaJS를 적극 사용하고 있습니다.
+
+이번 아티클에서는 왜 ElysiaJS가 저에게 다른 프레임워크보다 매력적으로 다가왔는 지에 관해 **성능 관점**에서 설명하겠습니다.
+
+> 이후, ElysiaJS는 Elysia로 줄여 적겠습니다.
+
+## Bun
+
+Elysia는 기본적으로 [Bun](https://bun.com/) 런타임을 사용하는 것을 전제로 개발되었습니다. 물론 Node.js나 Deno 등에서도 정상적으로 동작하지만, Elysia의 제성능을 내려면 Bun 런타임이 필수이며, 그 이유는 여러가지 있지만, 가장 중요한 이유는 `Bun.serve.routes`를 비롯한 Bun의 코어 라이브러리를 사용하기 위함입니다.
+
+`Bun.serve`는 매우 고성능입니다. 단순히 **"zig과 C++로 개발되어서"** 같은 뻔한 이유 대신, 왜 `Bun.serve`는 고성능일 수 밖에 없는 지 구체적인 이유를 설명드리겠습니다.
+
+### 1. uWebSockets의 트리 기반 라우팅
+
+**uWebSockets** 이란 C++ 기반의 HTTP와 WebSocket 웹 서버 라이브러리입니다. uWebSockets는 **아주 고성능이며 동시에 안정적**이라 암호화폐 거래 플랫폼에서 자주 사용됩니다.
+
+`Bun.serve`는 이런 uWebSockets의 라우팅 기법인 **트리 기반 라우팅** 기법을 사용하며, 애초에 Bun은 HTTP 서버와 WebSocket 서버는 uWebSockets를 내부 엔진으로 사용하고 있습니다.
+
+### 2. SIMD 가속 라우트 파라미터 디코딩 기법 적용
+
+**SIMD**는 Single Instruction, Multiple Data의 약자로써, CPU에서 하나의 명령어로 여러 데이터를 동시에 처리하는 기법입니다. 대부분의 프로그램의 경우, **SISD(Single Instruction, Single Data)** 기법을 사용하지만, Bun과 같은 런타임이나 컴파일러의 경우 텍스트 처리에 강한 SIMD를 적극적으로 활용합니다.
+
+`Bun.serve` 같은 경우, 라우트 파라미터 디코딩 시, SIMD 가속을 사용하여 성능을 증폭시킵니다.
+
+### 3. JavaScriptCore의 내부 구조를 캐싱
+
+Bun은 자바스크립트 엔진으로 **JavaScriptCore**를 사용하며, 엔진의 내부 구조를 캐싱합니다. 이를 통해 라우팅과 관련된 객체에 접근 시, 발생하는 오버헤드를 줄일 수 있었습니다.
+
+## JIT "컴파일러"
+
+> 여기서 말하는 "컴파일러"는 한 언어를 다른 언어로 변환하는 전통적인 의미가 아니며, 정의된 라우터와 미들웨어를 기반으로 요청 처리를 위한 최적화된 코드를 동적으로 생성하는 역할입니다. (Elysia 문서에서는 이런 혼란을 피하기 위해 큰 따옴표를 붙입니다.)
+
+Elysia는 0.4 버전부터 **JIT "컴파일러"** 가 내장되었습니다.
+
+Elysia는 각 라우트에 대한 첫 요청이 들어오면 라우트를 효율적으로 처리하기 위한 최적화된 코드를 **on-the-fly(실행 중에)** 동적으로 생성합니다.
+
+이 과정은 최신 CPU에서 대부분의 경우 0.005ms 미만이 소요되며, 라우트 당 한 번만 발생하며, 동적 코드를 저장하기 위한 메모리 사용량도 적습니다.
+
+JIT "컴파일러"는 `new Function(...)` 또는 `eval(...)`를 활용하여 개발되었으며, 이는 "보안 문제를 발생시킬 수 있으니, 절대 사용하지 말라" 라고 배웠던 코드이지만, Elysia 팀은 이걸 활용해 극한의 최적화를 만들어 냈습니다.
+
+따라서 JIT "컴파일러"의 동작 과정을 잘 이해하고 있는 Elysia 앱 개발자는 더 효과적으로 Elysia를 활용할 수 있습니다.
+
+## Sucrose(Static Code Analysis: 정적 코드 분석)
+
+**Sucrose(Static Code Analysis)** 는 JIT "컴파일러"와 같이 사용하는 정적 코드 분석 모듈입니다.
+
+```ts
+import { Elysia } from 'elysia';
+
+const app = new Elysia().patch('/user/:id', ({ params }) => {
+  return { id: params.id };
+});
+```
+
+위 코드에서 `PATCH /user/:id` 엔드포인트에 대한 요청은 `params` 속성의 파싱만 필요하다는 것을 알 수 있습니다.
+
+**Sucrose**는 이런 코드를 보고 `body`, `query`, `headers` 등 다른 속성에 대한 파싱은 필요하지 않으니, `params`만 파싱할 수 있도록 지시하는 역할을 가집니다.
+
+전통적인 방식으로는 `params` 외의 모든 속성들을 함께 파싱하게 되어 성능 저하가 발생할 수 있지만, Elysia는 각 라우트에 필요한 최소한의 파싱만 수행하여 성능을 최적화할 수 있었습니다.
+
+또한, 전통적인 분석 도구를 사용하지 않고 Elysia만의 기능들을 지원하기 위해 자체 정적 코드 분석 라이브러리(Sucrose)를 개발했습니다.
+
+## 마치며
+
+Bun + Elysia의 조합은 굉장히 빠르며 개발자 경험도 좋습니다.
+
+Bun v1.0은 2023년에 발표되었으며 프로덕션 용도로 사용되는 경우도 가끔 볼 수 있습니다. 현재(2026년 2월) 기준, 대부분의 앱 배포 플랫폼에서 Bun 런타임 옵션도 제공하고 있습니다.
+
+하지만, 개인적으로 Bun 생태계는 아직 성숙하다고 느껴지지 않습니다. 마이너 버전 업데이트 시에도 기존 앱에게 있어, 런타임 에러가 발생할 수도 있는 치명적인 정책 업데이트가 발생할 때도 있으며, 빠른 속도로 새로운 기능이 추가되는 경우도 있습니다.
+
+예를 들어, [v1.3.4 업데이트](https://bun.com/blog/bun-v1.3.4#standalone-executables-no-longer-load-config-files-at-runtime)에서는 standalone 실행 파일은 더 이상 `tsconfig`와 `package.json`을 자동으로 불러오지 않는 정책이 추가되어, LogHub 서비스의 장애로 이어지기도 했습니다.
+
+> **관련 이슈** : https://github.com/oven-sh/bun/issues/25395 (직접 토론에 참여해봤습니다!)
+
+그럼에도 불구하고, JS/TS 생태계에서 압도적인 성능을 자랑하기에, 저는 JS/TS 백엔드 프레임워크로 Elysia를 가장 선호합니다.
+
+## 참고
+
+- https://elysiajs.com/internal/jit-compiler.html
+- https://bun.com/docs/runtime/http/routing

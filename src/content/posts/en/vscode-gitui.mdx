@@ -1,0 +1,182 @@
+---
+title: 'vscode-gitui: Using gitui in VSCode'
+description: 'GitUI and Lazygit are lightweight, keyboard-driven Git clients that run in the terminal. Here is how I built vscode-gitui, a VSCode extension that opens them directly in the editor area.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/vscode-gitui.webp
+publishedAt: '2025-10-31T15:06:54.731697'
+updatedAt: '2025-11-26T19:34:35.783837+00:00'
+topics: ['typescript', 'git', 'vscode']
+author: 'gymynnym'
+draft: false
+---
+
+# vscode-gitui: Using gitui in VSCode
+
+## What Are GitUI and Lazygit?
+
+[GitUI](https://github.com/gitui-org/gitui) and [Lazygit](https://github.com/jesseduffield/lazygit) are Git clients that run in the **terminal with a TUI (Terminal User Interface)**. They are lighter and faster than GUI-based Git clients and are optimized for keyboard-driven workflows.
+
+You can already open a terminal in VSCode and run GitUI or Lazygit, but opening the terminal, typing the command, and switching panels every time felt tedious. So I built a **VSCode extension (`vscode-gitui`)** that lets you open GitUI or Lazygit directly in the editor area.
+
+## vscode-gitui Repository
+
+https://github.com/gymynnym/vscode-gitui
+
+If you would like to try it, you can install it from the [VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=gymynnym.vscode-gitui) or [GitHub Releases](https://github.com/gymynnym/vscode-gitui/releases/latest).
+
+> Keybindings for VSCodeVim users are also available. See the [repository README](https://github.com/gymynnym/vscode-gitui?tab=readme-ov-file#vscodevim-keybindings-for-nerds-example) for details.
+
+## Development Process
+
+### 1. Creating the Project
+
+> I followed [VSCode: Your First Extension](https://code.visualstudio.com/api/get-started/your-first-extension).
+
+First, create the project with the following command.
+
+```bash
+$ npx --package yo --package generator-code -- yo code
+```
+
+I chose **TypeScript** as the development language for the extension.  
+Next, install **vsce** to package it.
+
+```bash
+$ pnpm add -D @vscode/vsce
+```
+
+```json
+// package.json
+{
+  "scripts": {
+    "package": "vsce package"
+  }
+}
+```
+
+### 2. Registering Commands
+
+The extension registers the following two commands:
+
+1. `vscode-gitui.open`: Opens GitUI or Lazygit in the editor area.
+2. `vscode-gitui.reload`: Reloads GitUI or Lazygit from PATH.
+
+```typescript
+// src/extension.ts
+export function activate(context: vscode.ExtensionContext) {
+  const disposables = [
+    vscode.commands.registerCommand('vscode-gitui.open', () => handleGitClientCommand(openGitClient)),
+    vscode.commands.registerCommand('vscode-gitui.reload', () => handleGitClientCommand(reloadGitClient)),
+    ...
+  ];
+  disposables.forEach((disposable) => context.subscriptions.push(disposable));
+}
+```
+
+`handleGitClientCommand` is a utility function that checks whether the GitUI or Lazygit command is available on PATH. See [extension.ts](https://github.com/gymynnym/vscode-gitui/blob/master/src/extension.ts) for details.
+
+### 3. Implementing the Commands
+
+#### 3-1. `vscode-gitui.open`
+
+```ts
+// src/commands/open.ts
+async function openGitClient() {
+  const workspace = await getCurrentWorkspace();
+  const command = resolveGitCommand();
+  if (workspace) {
+    runCommandInTerminal(command, {
+      name: command,
+      cwd: workspace,
+      location: vscode.TerminalLocation.Editor,
+    });
+  }
+}
+
+async function getCurrentWorkspace(): Promise<string | undefined> {
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders || workspaceFolders.length === 0) {
+    throw new Error(ErrorMessage.WORKSPACE_NOT_FOUND);
+  }
+  if (workspaceFolders.length === 1) {
+    return workspaceFolders[0].uri.fsPath;
+  }
+
+  const pickedWorkspace = await vscode.window.showWorkspaceFolderPick({
+    placeHolder: 'Select a workspace folder to open gitui in',
+    ignoreFocusOut: true,
+  });
+  return pickedWorkspace?.uri.fsPath;
+}
+
+export { openGitClient };
+```
+
+The `openGitClient` function finds the current workspace, then runs the GitUI or Lazygit command in the editor area.  
+The `getCurrentWorkspace` function returns the workspace folder path. If multiple folders are open, it prompts the user to choose one.
+
+#### 3-2. `vscode-gitui.reload`
+
+```ts
+// src/commands/reload.ts
+async function reloadGitClient() {
+  const command = resolveGitCommand();
+  const exists = await checkCommandExists(command);
+  if (exists) {
+    vscode.window.showInformationMessage(InfoMessage.COMMAND_FOUND(command));
+  } else {
+    vscode.window.showErrorMessage(ErrorMessage.COMMAND_NOT_FOUND(command));
+  }
+}
+```
+
+The `reloadGitClient` function checks whether the GitUI or Lazygit command is available on PATH and displays the result in a message.  
+`checkCommandExists` is a utility function that checks whether a command exists.
+
+## Lazygit Support: A GitHub Issue Arrives!
+
+![GitHub issue requesting Lazygit support](https://assets.akuk.in/blog/in-content/1764139189086_support-lazygit-issu.webp)
+
+Initially, I only planned to support GitUI. Then a user opened an issue requesting [Lazygit support](https://github.com/gymynnym/vscode-gitui/issues/2), which led me to add support for Lazygit as well.
+
+### Adding Command Selection Logic
+
+I updated the `resolveGitCommand` function used in the code above to choose between GitUI and Lazygit based on the user settings.
+
+First, add a setting under `properties` in `package.json` to control whether to use Lazygit.
+
+```json
+// package.json
+{
+  "contributes": {
+    "configuration": {
+      "title": "vscode-gitui",
+      "properties": {
+        ...
+        "vscode-gitui.useLazygit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable if you want to use Lazygit instead of GitUI."
+        }
+      }
+    },
+  }
+}
+```
+
+Then, implement `resolveGitCommand` as follows to select the Git client.
+
+```ts
+// src/lib/command.ts
+const GITUI_COMMAND = 'gitui';
+const LAZYGIT_COMMAND = 'lazygit';
+
+function resolveGitCommand(): string {
+  const useLazygit = vscode.workspace.getConfiguration('vscode-gitui').get<boolean>('useLazygit', false);
+  return useLazygit ? LAZYGIT_COMMAND : GITUI_COMMAND;
+}
+```
+
+## Wrapping Up
+
+I built an extension that lets you use GitUI and Lazygit in VSCode. Although this was my first VSCode extension, it was relatively straightforward to implement. Communicating directly with a user through a GitHub issue during development was also a rewarding experience.
+I encourage you to try building a VSCode extension that meets your own needs!

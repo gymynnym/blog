@@ -1,0 +1,64 @@
+---
+title: '기본 사용법'
+description: '기본 사용법 전제 환경 공용 IP가 192.95.5.69 인 상태로 인터넷에 연결된 단일 물리 네트워크 인터페이스 eth0 를 가진 리눅스 환경에서, WireGuard 인터페이스 wg0 를 추가하고 wg0 에는 10.192.122.3/24 터널 IP를 부여한다. ip 명령으로 wg...'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-13T17:19:15.208700'
+updatedAt: '2025-12-18T18:36:21.020632'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 4
+author: 'gymynnym'
+draft: false
+---
+
+# 기본 사용법
+
+## 전제 환경
+
+공용 IP가 **192.95.5.69**인 상태로 인터넷에 연결된 단일 물리 네트워크 인터페이스 `eth0`를 가진 리눅스 환경에서, WireGuard 인터페이스 `wg0`를 추가하고 `wg0`에는 **10.192.122.3/24** 터널 IP를 부여한다.
+
+## `ip` 명령으로 `wg0` 인터페이스 추가
+
+```sh
+$ ip link add dev wg0 type wireguard # WireGuard 타입의 인터페이스 네트워크 wg0 생성
+$ ip address add dev wg0 10.192.122.3/24 # wg0에 10.192.122.3/24 터널 IP 부여
+$ ip route add 10.0.0.0/8 dev wg0 # 10.0.0.0/8 대역은 wg0로 라우팅
+$ ip address show # 결과 확인
+1: lo: <LOOPBACK> mtu 65536
+   inet 127.0.0.1/8 scope host lo
+2: eth0: <BROADCAST> mtu 1500
+   inet 192.95.5.69/24 scope global eth0
+3: wg0: <POINTOPOINT,NOARP> mtu 1420
+   inet 10.192.122.3/24 scope global wg0
+```
+
+위 명령어들의 동작은 `wg0`라는 네트워크 인터페이스를 만들고 IP/라우팅을 잡아준 것입니다.
+
+## `wg` 명령으로 암호키 라우팅 테이블 설정
+
+```sh
+$ wg setconf wg0 configuration-1.conf # 설정 파일을 읽어 wg0에 적용합니다.
+$ wg show wg0 # 적용 결과 확인
+interface: wg0
+  public key: HIgo...8ykw
+  private key: yAnz...fBmk
+  listening port: 41414
+peer: xTIB...p8Dg
+  allowed ips: 10.192.124.0/24, 10.192.122.3/32
+peer: TrMv...WXX0
+  allowed ips: 192.168.0.0/16, 10.192.122.4/32
+peer: gN65...z6EA
+  allowed ips: 10.10.10.230/32
+  endpoint: 192.95.5.70:54421
+```
+
+위 명령어들의 동작은 피어 목록, AllowedIPs, 키, 엔드포인트, 포트 등이 설정된 `configuration-1.conf` 파일을 사용해 `wg0` 인터페이스에 적용시킨 것입니다.
+
+### 인터페이스 활성화 및 통신 확인
+
+```sh
+$ ip link set wg0 up # wg0 인터페이스 활성화
+$ ping 10.10.10.230 # 통신 확인
+```
+
+이때, 해당 시스템에서 **10.10.10.230**으로 패킷을 보내면 데이터는 `wg0` 인터페이스를 통해 전송되며, `wg0`는 공개 키 `gN65...z6EA`와 연관된 보안 세션을 사용해 그 패킷을 **암호화**하고, 암호화 및 캡슐화된 패킷을 UDP를 통해 **192.95.5.70:54421**로 보낸다. `wg0`에서 **10.10.10.230**으로부터 패킷을 **수신**할 때, 관리자는 그것이 공개 키 `gN65...z6EA`를 가진 피어로부터 온 것임을 보장받을 수 있다.

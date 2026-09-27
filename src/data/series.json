@@ -1,2 +1,26 @@
 {
+  "astro-blog": {
+    "slug": "astro-blog",
+    "name": {
+      "ko": "Astro 블로그 만들기",
+      "en": "Building an Astro Blog",
+      "ja": "Astroブログを作る"
+    }
+  },
+  "pgroonga-guide": {
+    "slug": "pgroonga-guide",
+    "name": {
+      "ko": "PGroonga 가이드",
+      "en": "PGroonga Guide",
+      "ja": "PGroongaガイド"
+    }
+  },
+  "wireguard-whitepaper": {
+    "slug": "wireguard-whitepaper",
+    "name": {
+      "ko": "WireGuard 백서 쉽게 읽기",
+      "en": "Reading the WireGuard Whitepaper",
+      "ja": "WireGuardホワイトペーパーをやさしく読む"
+    }
+  }
 }

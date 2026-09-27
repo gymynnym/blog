@@ -1,0 +1,52 @@
+---
+title: '암호키 라우팅'
+description: '암호키 라우팅 WireGuard에서 peer는 32바이트 Curve25519 공개키로 식별됩니다. WireGuard에서 암호키 라우팅 이란, "peer의 공개키"와 "허용된 소스 IP 주소"를 결합해서, 어떤 패킷이 어떤 peer로 라우팅되어야 하는지를 결정하는 메커니즘을 의미합니...'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-13T15:24:50.498468'
+updatedAt: '2025-12-18T18:35:44.069987'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 2
+author: 'gymynnym'
+draft: false
+---
+
+# 암호키 라우팅
+
+> WireGuard에서 peer는 32바이트 `Curve25519` 공개키로 식별됩니다.
+
+WireGuard에서 **암호키 라우팅**이란, "peer의 공개키"와 "허용된 소스 IP 주소"를 결합해서, 어떤 패킷이 어떤 peer로 라우팅되어야 하는지를 결정하는 메커니즘을 의미합니다.
+
+## 암호키 라우팅 테이블
+
+다음은 WireGuard의 **암호키 라우팅 테이블** 예시입니다.
+
+| Interface Public Key | Interface Private Key | Listen |
+| -------------------- | --------------------- | ------ |
+| `HIgo...8ykw`        | `yAnz...fBmk`         | 41414  |
+
+| Peer Public Key | Allowed Source IPs               |
+| --------------- | -------------------------------- |
+| `xTIB...p8Dg`   | 10.192.122.3/32, 10.192.124.0/24 |
+| `TrMv...WXX0`   | 10.192.122.4/32, 192.168.0.0/16  |
+| `gN65...z6EA`   | 10.10.10.230/32                  |
+
+인터페이스는 **하나의 비밀키와 listen할 UDP 포트**를 가지며, 그 뒤에 피어 목록이 옵니다. 각 피어는 공개키로 식별되며, 허용된 소스 IP 주소 목록을 가집니다.
+
+WireGuard 인터페이스로 송신될 outgoing 패킷이 있을 때, 이 테이블을 조회하여, 암호화에 사용할 공개키를 결정합니다. 반대로, 수신된 incoming 패킷이 있을 때는 복호화하고 인증한 뒤에 소스 IP 주소를 확인하여, 해당 피어의 Allowed Source IPs 목록에 포함되는지 검사합니다. (검증 실패 시 패킷 폐기)
+
+WireGuard가 이처럼 매우 단순한 원리로 동작할 수 있는 이유는, IPsec과 달리 엄격하게 3계층에 기반하여 더 깔끔한 네트워크 설계를 강제하기 때문입니다.
+
+## Endpoint
+
+WireGuard에서 **암호키 라우팅 테이블**에 peer의 외부 IP:port(endpoint)의 명시는 선택적입니다. peer로부터 인증된 패킷을 받으면, peer로부터 인증된 패킷을 받으면, 해당 패킷의 outer source IP:port를 보고 endpoint를 자동으로 갱신합니다.
+
+> 만약 peer의 외부 IP:port를 명시적으로 지정하면, "처음 연결을 트리거하는 주소"는 고정이지만, 이후엔 실제 관측된 주소로 endpoint가 갱신됩니다.
+
+## Roaming(이동성)
+
+WireGuard에서 peer는 IP 주소가 아닌 공개키로 식별되므로, peer의 네트워크 위치가 변경되더라도, 새로 들어온 인증된 패킷의 소스 IP/port로 endpoint을 자동 갱신합니다.
+
+## Listening Port == Source Port
+
+WireGuard는 peer의 listening port와 해당 peer가 송신하는 패킷의 소스 port를 동일하게 유지합니다. 덕분에 구조가 단순해지고, NAT 환경에서의 신뢰성이 향상됩니다. 때문에 NAT 세션을 오래 유지할 필요가 없습니다. (예외 상황 시, keepalive 설정으로 유지 가능)

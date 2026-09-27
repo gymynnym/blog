@@ -1,0 +1,84 @@
+---
+title: '타이머 및 Stateless UX'
+description: '타이머 및 Stateless UX WireGuard에서 사용자는 본인의 비밀키와 상대방의 공개키 만 구성하면 패킷을 전송할 수 있습니다. 세션 상태 유지, 완전 순방향 비밀성, 핸드셰이크 등은 완전히 백그라운드에서 처리 되며, 이를 WireGuard 백서에서는 "사용자 관점에서 s...'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-18T21:53:12.191644'
+updatedAt: '2025-12-18T21:53:12.434701'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 6
+author: 'gymynnym'
+draft: false
+---
+
+# 타이머 및 Stateless UX
+
+WireGuard에서 사용자는 **본인의 비밀키와 상대방의 공개키**만 구성하면 패킷을 전송할 수 있습니다. 세션 상태 유지, 완전 순방향 비밀성, 핸드셰이크 등은 완전히 **백그라운드에서 처리**되며, 이를 WireGuard 백서에서는 **"사용자 관점에서 stateless처럼 보인다."** 라고 표현합니다.
+
+이와 유사한 설계를 가진 과거의 VPN들은 버그가 많았지만, WireGuard는 매우 단순한 **타이머 상태 머신**을 사용하여 이를 해결합니다.
+
+## 1. 기본 준비 사항
+
+**타이머 상태 시스템**은 다음과 같은 상수들을 기반으로 동작합니다:
+
+| Symbol                  | Value                  |
+| ----------------------- | ---------------------- |
+| `Rekey-After-Messages`  | 2^60 메세지            |
+| `Reject-After-Messages` | 2^64 - 2^13 - 1 메세지 |
+| `Rekey-After-Time`      | 120초                  |
+| `Reject-After-Time`     | 180초                  |
+| `Rekey-Attempt-Time`    | 90초                   |
+| `Rekey-Timeout`         | 5초                    |
+| `Keepalive-Timeout`     | 10초                   |
+
+> **Rekey** : 암호키를 주기적으로 갱신하는 작업을 의미합니다.
+
+WireGuard는 어떠한 경우에도 `Rekey-Timeout` 시간 내에 중복해서 연결 요청을 전송하지 않습니다.
+
+보안 세션은 핸드셰이크 응답을 성공적으로 수신한 후에 생성되며, 타이머 만료로 인해 연결 요청이 전송될 때 마다, 만료 시간에 일정량의 **Jitter(무작위 지연)** 가 추가됩니다. 이는 두 피어가 동시에 반복적으로 핸드셰이크를 시도하는 충돌을 방지하기 위함입니다.
+
+## 2. 전송 메세지 제한
+
+보안 세션을 주기적으로 **Rekey** 되며, 다음 두 가지의 경우에 수행됩니다:
+
+1. **메세지 개수 제한** : `Rekey-After-Messages` 이상의 데이터가 전송되면 **Rekey**
+2. **시간 제한** : `Rekey-After-Time` 이 지나면 **Rekey**
+
+WireGuard는 **Thundering Herd Problem(동시 폭주 문제)** 를 방지하기 위해 **현재 세션의 개시자(Initiator)** 만 키 갱신을 주도합니다.
+
+> **Thundering Herd Problem** : 양쪽이 동시에 키 교환을 요청하는 문제
+
+또, 만약 키 갱신에 실패하고 `Reject-After-Time` 이 지나면 WireGuard는 즉시 새로운 1-RTT 핸드셰이크가 성공할 때까지 **통신을 차단**합니다.
+
+## 3. 키 로테이션
+
+WireGuard는 **Perfect Forward Secrecy(완전 순방향 비밀성)** 을 보장합니다. 그 예로 키의 기밀성이 훼손되어도 과거의 내용은 복호화할 수 없게, 키를 끊임없이 갱신합니다.
+
+하지만 네트워크 지연으로 인해 오래된 키로 암호화된 패킷이 늦게 도착하는 경우, 기존의 키를 가지고 있지 않으면, 이를 버려야합니다.
+
+WireGuard는 이를 방지하기 위해 `Current`, `Previous`, `Next` 3개의 키를 메모리에 유지합니다. 핸드셰이크가 완료되면 `Next`는 `Current`가 되고, `Current`는 `Previous`가 되며, `Previous`는 지워집니다.
+
+## 4. 핸드셰이크 시작과 재전송
+
+현재 유효한 세션이 없는 상태에서 데이터를 보낼 때 **첫 핸드셰이크**는 다음과 같이 진행됩니다:
+
+1. 보내려던 데이터 패킷을 Queue에 임시저장합니다.
+2. 핸드셰이크 메세지를 전송합니다.
+3. 응답이 오면 세션을 맺고 Queue의 데이터를 전송합니다.
+
+또한 핸드셰이크 요청을 보냈는데 `Rekey-Timeout` 동안 응답이 없으면, **재전송**이 다음과 같이 진행됩니다:
+
+1. 포기하지 않고 **새로운 무작위 키**를 생성해서 다시 핸드셰이크를 시도합니다.
+2. 이 과정은 `Rekey-Attempt-Time` 동안 5초마다 반복됩니다.
+
+## 5. Passive Keepalive
+
+> **침묵은 미덕이다.**
+
+WireGuard는 보낼 데이터가 없으면, 아무것도 보내지 않습니다. 때문에, 상대방이 살아있는지 여부를 판단하기 위해 다음과 같은 전략을 사용합니다.
+
+- 상대방이 나에게 데이터를 전송
+- 나는 상대에게 보낼 데이터가 없음
+- 이때 **"나는 살아있다"** 를 알려주기 위해 빈 패킷을 전송
+
+이 덕분에, 상대방은 내가 연결이 끊겨서 조용한 건지 아닌지 알 수 있습니다.

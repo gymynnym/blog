@@ -1,0 +1,137 @@
+---
+title: 'Postgresus: Postgres의 반전술식'
+description: 'Postgresus: Postgres의 반전술식 Postgresus란? 원문: Free, open source and self-hosted solution for automated PostgreSQL backups. With multiple storage options and no...'
+thumbnail: https://assets.akuk.in/blog/thumbnails/Postgresus_%20Postgres%EC%9D%98%20%EB%B0%98%EC%A0%84%20%EC%88%A0%EC%8B%9D.png
+publishedAt: '2025-11-24T17:05:08.530542'
+updatedAt: '2025-11-25T01:28:11.541627+00:00'
+topics: ['postgresql', 'docker']
+author: 'gymynnym'
+draft: false
+---
+
+# Postgresus: Postgres의 반전술식
+
+## Postgresus란?
+
+> **원문:** Free, open source and self-hosted solution for automated PostgreSQL backups. With multiple storage options and notifications  
+> **번역**: 여러 저장소 옵션과 알림 기능을 지원하는, 자동화된 PostgreSQL 백업을 위한 무료 오픈 소스 자체 호스팅 솔루션
+
+[RostislavDugin/postgresus](https://github.com/RostislavDugin/postgresus)는 PostgreSQL 자동 백업 툴이며, 제공하는 주요 기능은 다음과 같습니다:
+
+#### 1. 예약된 백업(Scheduled Backups)
+
+특정 시간을 지정해서 백업을 실행할 수 있으며, 균형 잡힌 압축 방식으로 4~8배 저장공간을 절감합니다.
+
+#### 2. 다중 저장소 대상(Multiple Storage Destination)
+
+로컬 저장소, 클라우드 저장소(S3, R2, Google Drive 등) 다중 저장소를 지원합니다. (보안 옵션도 저장소에 따라 제공합니다)
+
+#### 3. 스마트 알림
+
+Email, Telegram, Slack, Discord 등 여러 채널을 통해 성공 및 실패 알림을 지원합니다.
+
+> 이외에도 [Postgresus features 문서](https://github.com/RostislavDugin/postgresus?tab=readme-ov-file#-features)에서 더 많은 정보를 얻을 수 있습니다.
+
+## Postgresus 설치
+
+자동 설치 스크립트도 지원하지만, 필자는 Docker Compose가 익숙하기에, 이 아티클에서는 Docker Compose를 통해 설치합니다.
+
+```yml
+services:
+  my-postgres:
+    container_name: my-postgres
+    image: postgres:18
+    # more options
+  my-postgresus:
+    container_name: my-postgresus
+    image: rostislavdugin/postgresus:latest
+    ports:
+      - '4005:4005' # WebUI에 접근하기 위한 포트
+    volumes:
+      - ./postgresus/data:/postgresus-data # 백업 데이터 볼륨 마운트
+    depends_on:
+      - my-postgres # PostgreSQL 의존성
+```
+
+이번 설치에서는 PostgreSQL 18버전을 사용했습니다.  
+Postgresus 컨테이너 선언 시, WebUI에 접근하기 위한 **포트**와 백업 데이터 **볼륨**의 마운트를 설정합니다.
+
+## Postgresus 사용
+
+### 1. Postgresus WebUI 접속
+
+WebUI에 접근하기 위해 브라우저로 [http://yourhost:4005/](http://yourhost:4005/)에 접속합니다.
+
+![Sign up admin.png](https://assets.akuk.in/blog/in-content/1763969003219_Signupadmin.webp 'Sign up admin')
+
+화면에 표시되는 안내에 따라 admin 계정을 생성합니다.
+
+> **참고**: [여기에](https://en.wikipedia.org/wiki/List_of_the_most_common_passwords) 당신의 password가 없길 바랍니다 :)
+
+### 2. Workspace 생성
+
+![Create workspace.png](https://assets.akuk.in/blog/in-content/1763969211014_Createworkspace.webp 'Create worksapce')
+
+admin 계정 설정 직후, 보이는 Create workspace 버튼을 클릭하면 Workspace를 생성할 수 있습니다.
+
+> Postgresus에서 Workspace란, 데이터베이스, 저장소, 알림 설정 등을 관리하는 단위입니다.
+
+### 3. 백업 설정
+
+![Add database for backup.png](https://assets.akuk.in/blog/in-content/1763969377463_Adddatabaseforbackup.webp 'Add database for backup')
+
+다음으로 백업할 대상(PostgreSQL)을 설정합니다. 방금 전 Docker Compose에서 선언한 PostgreSQL 컨테이너를 설정해줍니다.
+
+설정 후에는 백업 작업 전용의 read-only 사용자의 생성 여부를 묻습니다. 이는 선택 사항이며, 이 아티클에서는 스킵하겠습니다.
+
+![Add backup options.png](https://assets.akuk.in/blog/in-content/1763969560935_Addbackupoptions.webp 'Add backup options')
+
+백업할 대상(PostgreSQL)의 설정이 끝나면, 백업 관련 설정을 진행해야 합니다. 저는 다음과 같이 설정하겠습니다.
+
+- 매일 오전 4시
+- 백업 실패 시, 재시도 3회
+- 복원 처리 시, 1개의 CPU 사용
+- 백업 1개월 보관
+- 로컬 스토리지 사용(암호화 사용 안함)
+- 백업 성공/실패 시, 알림
+
+### 4. 알림 설정
+
+![Add notifier.png](https://assets.akuk.in/blog/in-content/1763969631838_Addnotifier.webp 'Add notifier')
+
+마지막으로 Notifier를 설정합니다. 저는 Discord Webhook을 통해 알림을 받도록 설정해보았습니다(이외에도 Slack, Telegram 등 다양한 벤더를 사용할 수 있습니다).
+
+![Discord.png](https://assets.akuk.in/blog/in-content/1763969936544_Discord.webp 'Discord에서 확인된 연결 테스트 및 백업 알림')
+
+![Postgres backups.png](https://assets.akuk.in/blog/in-content/1763969737239_Postgresbackups.webp 'Postgres backups')
+
+설정이 완료되면 위와 같이 백업을 한번 실행하며, 백업 리스트에 추가됩니다.  
+삭제, 복원 그리고 다운로드 Action을 쉽게 사용할 수 있으며, `Make backup right now` 이라고 적힌 버튼을 클릭하면 바로 backup을 생성할 수도 있습니다.
+
+## 결과
+
+```
+$ docker stats my-postgresus
+CONTAINER ID   NAME            CPU %     MEM USAGE / LIMIT
+............   my-postgresus   0.00%     77.63MiB / ...
+```
+
+idle 상태에서 CPU/메모리 사용량입니다. 이정도면 Postgresus는 검소한 성격인가 봅니다.
+
+```
+├── docker-compose.yml
+└── postgresus
+    └── data
+        ├── backups
+        │   └── ...
+        ├── pgdata
+        ├── secret.key
+        └── temp
+```
+
+백업 파일도 정상적으로 확인 됩니다.
+
+## 마치며
+
+이제 데이터는 안전합니다!  
+대신 물리 드라이브를 RAID/백업할 시간인 것 같습니다...

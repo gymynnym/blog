@@ -1,0 +1,148 @@
+---
+title: 'PGroonga의 다양한 함수'
+description: "PGroonga의 다양한 함수 pgroonga condition() : 고급 검색 조건 SELECT FROM articles WHERE ARRAY title, content &@ pgroonga condition( '첫 번째', weights => ARRAY 2, 1 , index..."
+thumbnail: https://assets.akuk.in/blog/thumbnails/PGroonga%20%EA%B0%80%EC%9D%B4%EB%93%9C.png
+publishedAt: '2025-12-02T00:49:57.090312'
+updatedAt: '2025-12-03T23:38:31.342086'
+topics: ['postgresql', 'docker']
+series: 'pgroonga-guide'
+seriesOrder: 4
+author: 'gymynnym'
+draft: false
+---
+
+# PGroonga의 다양한 함수
+
+### `pgroonga_condition()` : 고급 검색 조건
+
+```sql
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@~ pgroonga_condition(
+	'첫 번째',
+	weights => ARRAY[2, 1],
+	index_name => 'articles_pgroonga_idx'
+);
+```
+
+`pgroonga_condition()` 함수는 고급 검색 조건을 생성하며, 다음과 같은 옵션을 인자로 받을 수 있습니다:
+
+- `keyword` : 검색 키워드
+- `weights` : 각 컬럼에 대한 가중치 배열. 예제에서는 `title`에 2, `content`에 1의 가중치를 부여했습니다.
+- `index_name` : 사용할 PGroonga 인덱스의 이름
+- `fuzzy_max_distance_ratio` : 퍼지 검색의 최대 거리 비율(오타 허용 범위)
+- [기타 옵션](https://pgroonga.github.io/reference/functions/pgroonga-condition.html#syntax)
+
+### `pgroonga_score()` : 검색 결과 관련도 반환
+
+> `TokenBigram` 토크나이저 + 한국어 예제에서는 제대로 동작하지 않기에, 영문 예제를 사용합니다. (`Mecab-ko` 토큰나이저 사용 중이라면 제대로 동작합니다.)
+
+```sql
+CREATE TABLE memos (
+  title text,
+  content text
+);
+
+CREATE INDEX pgroonga_memos_index ON memos
+USING pgroonga ((ARRAY[title, content]))
+
+INSERT INTO memos VALUES ('PostgreSQL', 'PostgreSQL is a relational database management system.');
+INSERT INTO memos VALUES ('Groonga', 'Groonga is the fast full text search engine optimized for Japanese.');
+INSERT INTO memos VALUES ('PGroonga', 'PGroonga is an extension for PostgreSQL to use Groonga as the index.');
+INSERT INTO memos VALUES ('command line', 'There is a groonga command.');
+```
+
+```sql
+SELECT *, pgroonga_score(tableoid, ctid) AS score
+FROM memos
+WHERE ARRAY[title, content] &@~ pgroonga_condition(
+  'PostgreSQL OR Groonga',
+  weights => ARRAY[2, 1],
+  index_name => 'pgroonga_memos_index'
+)
+ORDER BY score DESC;
+--     title     |                               content                                | score
+-- --------------+----------------------------------------------------------------------+-------
+--  PostgreSQL   | PostgreSQL is a relational database management system.               |     3
+--  Groonga      | Groonga is the fast full text search engine optimized for Japanese.  |     3
+--  PGroonga     | PGroonga is an extension for PostgreSQL to use Groonga as the index. |     2
+--  command line | There is a groonga command.                                          |     1
+```
+
+`pgroonga_score()` 함수는 검색 결과의 관련도(`double precision`)를 반환하며, 인수로는 `tableoid`와 `ctid`를 전달해야 합니다.
+
+> PK가 포함된 인덱스를 인자로 사용할 수도 있지만, 성능이 좋지 않아 권장되지 않습니다.
+
+위 예제의 결과를 순서대로 보면,
+
+1. 2(`PostgreSQL` 포함) + 1(`Groonga` 포함) = 3
+2. 1(`Groonga` 포함) = 3
+3. 2(`PostgreSQL` 포함) = 2
+4. 1(`groonga` 포함) = 1
+
+위와 같은 수식으로 관련도가 계산되며, 이 값을 사용해 검색 결과를 관련도 순으로 정렬할 수도 있습니다.
+
+### `pgroonga_query_expand()` : 쿼리 확장(동의어 처리)
+
+```sql
+CREATE TABLE synonyms (
+  term text,
+  synonyms text[]
+);
+
+CREATE INDEX synonyms_term
+ON synonyms USING pgroonga (term pgroonga_text_term_search_ops_v2);
+
+INSERT INTO synonyms VALUES ('article', ARRAY['기사', '글', '논문']);
+```
+
+- `synonyms` 테이블은 동의어 사전을 관리하는 테이블입니다.
+- `synonyms_term` 인덱스는 `synonyms` 동의어 사전 탐색을 위한 PGroonga 인덱스입니다.
+
+```sql
+SELECT pgroonga_query_expand('synonyms', 'term', 'synonyms', '첫 번째 article') AS query_expand;
+--             query_expand
+-- ------------------------------------
+--  첫 번째 ((기사) OR (글) OR (논문))
+```
+
+위 쿼리를 통해 `article`이라는 단어가 동의어 사전을 참조해 확장된 것을 확인할 수 있습니다.
+
+```
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@~ pgroonga_query_expand(
+  'synonyms',
+  'term',
+  'synonyms',
+  '첫 번째 article'
+);
+--  id |    title     |          content
+-- --+--------------+----------------------------
+--   1 | 첫 번째 기사 | 이것은 첫 번째 기사입니다.
+```
+
+`pgroonga_query_expand()` 함수는 동의어 사전을 사용해 쿼리를 확장하며, 순서대로 다음과 같은 인자를 받습니다:
+
+- `table_name` : 동의어 사전 테이블 이름
+- `term_column_name` : 동의어 사전에서 검색어가 저장된 컬럼 이름
+- `synonyms_column_name` : 동의어 사전에서 동의어 배열이 저장된 컬럼 이름
+- `query` : 확장할 쿼리 문자열
+
+### `pgroonga_snippet_html()` : 검색어 하이라이트 (HTML)
+
+```sql
+SELECT id, unnest(
+  pgroonga_snippet_html(
+    title,
+    pgroonga_query_extract_keywords('첫 번째')
+  )
+) AS highlighted_title
+FROM articles
+WHERE ARRAY[title, content] &@~ '첫 번째';
+--  id |                           highlighted_title
+-- ----+------------------------------------------------------------------------
+--   1 | <span class="keyword">첫</span> <span class="keyword">번째</span> 기사
+```
+
+- `pgroonga_snippet_html()` 함수는 검색어가 포함된 부분을 span 태그로 감싼 문자열 배열을 반환합니다.
+  - 위 예제에서는 `unnest()` 함수를 사용해 배열을 flat 처리했습니다.
+- `pgroonga_query_extract_keywords()` 함수는 전달받은 쿼리에서 키워드를 추출합니다.

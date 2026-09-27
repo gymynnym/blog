@@ -1,0 +1,38 @@
+---
+title: '결론'
+description: '결론 4,000줄 미만의 코드베이스 WireGuard는 전체 코드가 4,000 미만으로, IPsec 또는 OpenVPN에 비해 매우 작은 코드입니다. 덕분에 취약점 탐지 및 유지보수가 쉬운 장점이 있습니다. 멀티 플랫폼 WireGuard는 커널 공간에서 동작하기에 고성능이며, 코드...'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-19T01:17:26.180434'
+updatedAt: '2025-12-19T13:53:25.997026'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 7
+author: 'gymynnym'
+draft: false
+---
+
+# 결론
+
+## 4,000줄 미만의 코드베이스
+
+WireGuard는 전체 코드가 4,000 미만으로, IPsec 또는 OpenVPN에 비해 매우 작은 코드입니다. 덕분에 취약점 탐지 및 유지보수가 쉬운 장점이 있습니다.
+
+## 멀티 플랫폼
+
+WireGuard는 커널 공간에서 동작하기에 고성능이며, 코드베이스도 작기에 폭넓은 기기에서의 사용성을 보장하며, 먼 미래까지 신뢰할 수 있는 보안 특성을 제공합니다.
+
+## 암호키 라우팅 방식
+
+WireGuard는 복잡한 설정 대신, 피어의 **공개키와 허용된 IP 주소**만으로 연결을 허용하는 간단한 방식을 사용합니다. 덕분에 보안 사고를 방지하고 관리하기가 편해집니다.
+
+## 침묵 보안
+
+WireGuard는 기본적으로 "인증되지 않은 패킷"에 응답하지 않기 때문에, 네트워크 스캐닝이 힘들어 안전합니다.
+
+## 번외: 쉬운 사용법
+
+> [Nyr/wireguard-install](https://github.com/Nyr/wireguard-install) 비공식 간편 스크립트를 통한 설치도 가능합니다.
+
+```
+$ wget https://git.io/wireguard -O wireguard-install.sh && bash wireguard-install.sh
+```
