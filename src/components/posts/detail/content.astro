@@ -18,6 +18,13 @@
     background-color: transparent !important;
   }
 
+  @media (width < 40rem) {
+    [data-post-content] :global(pre) {
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+  }
+
   [data-post-content] :global(table) {
     display: block;
     width: max-content;
