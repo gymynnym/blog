@@ -1,0 +1,62 @@
+---
+import { getCollection } from 'astro:content';
+import PostList from '@/components/posts/list.astro';
+import PostListItem from '@/components/posts/list-item.astro';
+import GlobalLayout from '@/layouts/global.astro';
+import { locales, ui, type LanguageLinks, type Locale } from '@/lib/i18n';
+import { publishedPosts } from '@/lib/posts';
+import { topicPath } from '@/lib/routes';
+import { resolveTopics, topicFromEntry, type Topic } from '@/lib/topics';
+
+export async function getStaticPaths() {
+  const posts = await publishedPosts();
+  const usedTopicSlugs = new Set(
+    (await Promise.all(posts.map((post) => resolveTopics(post.data.topics)))).flat().map((topic) => topic.slug),
+  );
+  if (usedTopicSlugs.size === 0) return [];
+
+  const topics = await getCollection('topics');
+
+  return topics
+    .map(topicFromEntry)
+    .filter((topic) => usedTopicSlugs.has(topic.slug))
+    .flatMap((topic) =>
+      locales.map((lang) => ({
+        params: { lang, slug: topic.slug },
+        props: { lang, topic },
+      })),
+    );
+}
+
+const { lang, topic } = Astro.props as {
+  lang: Locale;
+  topic: Topic;
+};
+const postsWithTopics = await Promise.all(
+  (await publishedPosts(lang)).map(async (post) => ({ post, topics: await resolveTopics(post.data.topics) })),
+);
+const posts = postsWithTopics
+  .filter(({ topics }) => topics.some((postTopic) => postTopic.slug === topic.slug))
+  .map(({ post }) => post);
+const languageLinks = Object.fromEntries(
+  locales.map((locale) => [locale, topicPath(locale, topic.slug)]),
+) as LanguageLinks;
+const labels = ui[lang];
+---
+
+<GlobalLayout title={topic.name} locale={lang} languageLinks={languageLinks}>
+  <main>
+    <h1>{labels.topics}: {topic.name}</h1>
+    {
+      posts.length === 0 ? (
+        <p>{labels.noPosts}</p>
+      ) : (
+        <PostList>
+          {posts.map((post) => (
+            <PostListItem post={post} locale={lang} />
+          ))}
+        </PostList>
+      )
+    }
+  </main>
+</GlobalLayout>

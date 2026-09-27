@@ -1,0 +1,45 @@
+<div
+  data-post-content
+  class="[&_blockquote]:text-muted-foreground [&_:not(pre)>code]:bg-muted mx-auto max-w-3xl space-y-4 px-6 py-10 leading-7 [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-0.5 [&_a]:underline [&_a]:underline-offset-4 [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:pt-6 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:pt-4 [&_h3]:text-lg [&_h3]:font-semibold [&_img]:rounded-md [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6"
+>
+  <slot />
+</div>
+
+<style>
+  [data-post-content] :global(pre) {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    background-color: var(--muted) !important;
+  }
+
+  [data-post-content] :global(pre.astro-code span) {
+    background-color: transparent !important;
+  }
+
+  [data-post-content] :global(table) {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  [data-post-content] :global(th),
+  [data-post-content] :global(td) {
+    border: 1px solid var(--border);
+    padding: 0.625rem 0.875rem;
+    vertical-align: top;
+  }
+
+  [data-post-content] :global(th) {
+    background-color: var(--muted);
+    font-weight: 600;
+  }
+
+  [data-post-content] :global(th:not([align])) {
+    text-align: left;
+  }
+</style>

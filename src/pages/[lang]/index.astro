@@ -1,0 +1,17 @@
+---
+import HomePageContent from '@/components/home/page-content.astro';
+import GlobalLayout from '@/layouts/global.astro';
+import { locales, ui, type LanguageLinks, type Locale } from '@/lib/i18n';
+import { homePath } from '@/lib/routes';
+
+export function getStaticPaths() {
+  return locales.map((lang) => ({ params: { lang }, props: { lang } }));
+}
+
+const { lang } = Astro.props as { lang: Locale };
+const languageLinks = Object.fromEntries(locales.map((locale) => [locale, homePath(locale)])) as LanguageLinks;
+---
+
+<GlobalLayout description={ui[lang].blogDescription} locale={lang} languageLinks={languageLinks}>
+  <HomePageContent locale={lang} />
+</GlobalLayout>

@@ -1,0 +1,38 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+type Props = HTMLAttributes<'img'>;
+
+const { title, ...attributes } = Astro.props;
+---
+
+{
+  title ? (
+    <figure class="post-image">
+      <img {...attributes} title={title} />
+      <figcaption class="post-image-caption">{title}</figcaption>
+    </figure>
+  ) : (
+    <img {...attributes} />
+  )
+}
+
+<style>
+  .post-image {
+    display: block;
+  }
+
+  .post-image img {
+    margin-inline: auto;
+  }
+
+  .post-image-caption {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+</style>

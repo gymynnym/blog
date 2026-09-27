@@ -1,0 +1,88 @@
+---
+import { Layers, X } from '@lucide/astro';
+import { ui, type Locale } from '@/lib/i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+---
+
+<div data-topic-filter hidden class="flex flex-wrap gap-2">
+  {
+    ['topic', 'series'].map((key) => (
+      <a
+        data-filter-key={key}
+        hidden
+        href=""
+        title={ui[locale].clearFilter}
+        class="bg-background/20 hover:bg-muted/20 hover:text-muted-foreground flex items-center gap-1 rounded-sm border px-1 py-1 text-sm backdrop-blur-md transition-colors"
+      >
+        {key === 'series' && <Layers class="size-5 shrink-0" aria-hidden="true" />}
+        <span data-filter-value />
+        <X class="size-3.5" aria-hidden="true" />
+      </a>
+    ))
+  }
+</div>
+
+<p data-topic-filter-empty hidden class="text-muted-foreground py-8 text-sm">
+  {ui[locale].noFilterResults}
+</p>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const topic = params.get('topic')?.trim().toLowerCase();
+  const series = params.get('series')?.trim().toLowerCase();
+  const list = document.querySelector<HTMLElement>('[data-topic-list]');
+  const filter = document.querySelector<HTMLElement>('[data-topic-filter]');
+  const empty = document.querySelector<HTMLElement>('[data-topic-filter-empty]');
+
+  if ((topic || series) && list && filter && empty) {
+    const items = [...list.querySelectorAll<HTMLElement>('[data-topics]')];
+    let visibleItems = 0;
+
+    for (const item of items) {
+      const topics = item.dataset.topics?.split(' ') ?? [];
+      const visible = (!topic || topics.includes(topic)) && (!series || item.dataset.series === series);
+      item.hidden = !visible;
+      if (visible) visibleItems += 1;
+    }
+
+    if (series) {
+      const chapters = items
+        .filter((item) => !item.hidden)
+        .sort((a, b) => Number(a.dataset.seriesOrder) - Number(b.dataset.seriesOrder));
+      list.append(...chapters);
+    }
+
+    const links = [...list.querySelectorAll<HTMLAnchorElement>('a[href]')];
+    for (const [key, selected] of [
+      ['topic', topic],
+      ['series', series],
+    ] as const) {
+      if (!selected) continue;
+      const clear = filter.querySelector<HTMLAnchorElement>(`[data-filter-key="${key}"]`);
+      const value = clear?.querySelector<HTMLElement>('[data-filter-value]');
+      if (!clear || !value) continue;
+
+      const badge = links.find((link) => new URL(link.href).searchParams.get(key) === selected);
+      const name = badge?.textContent?.trim() || selected;
+      const icon = badge?.querySelector('img')?.cloneNode(true) as HTMLImageElement | undefined;
+      if (icon) {
+        icon.alt = '';
+        clear.prepend(icon);
+      }
+      value.textContent = name;
+      clear.setAttribute('aria-label', `${name}: ${clear.title}`);
+      const url = new URL(window.location.href);
+      url.searchParams.delete(key);
+      clear.href = `${url.pathname}${url.search}${url.hash}`;
+      clear.hidden = false;
+    }
+    filter.hidden = false;
+    list.hidden = visibleItems === 0;
+    empty.hidden = visibleItems !== 0;
+  }
+</script>

@@ -1,0 +1,66 @@
+---
+import { getEntry, render } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+import PostAuthorCard from '@/components/posts/detail/author-card.astro';
+import PostContent from '@/components/posts/detail/content.astro';
+import PostFooter from '@/components/posts/detail/footer.astro';
+import PostHeader from '@/components/posts/detail/header.astro';
+import PostHero from '@/components/posts/detail/hero.astro';
+import PostImage from '@/components/posts/detail/image.astro';
+import PostParagraph from '@/components/posts/detail/paragraph.astro';
+import PostToc from '@/components/posts/detail/toc.astro';
+import GlobalLayout from '@/layouts/global.astro';
+import type { Locale } from '@/lib/i18n';
+import { postRoute, publishedPosts, translationLinks } from '@/lib/posts';
+import { resolveTopics } from '@/lib/topics';
+
+export async function getStaticPaths() {
+  const posts = await publishedPosts();
+
+  return posts.map((post) => {
+    const { locale, slug } = postRoute(post);
+    return { params: { lang: locale, slug }, props: { post } };
+  });
+}
+
+const { post } = Astro.props as { post: CollectionEntry<'posts'> };
+const { locale } = postRoute(post);
+const allPosts = await publishedPosts();
+const languageLinks = translationLinks(post, allPosts);
+const topics = await resolveTopics(post.data.topics);
+const series = post.data.series ? await getEntry(post.data.series) : undefined;
+const { Content, headings } = await render(post);
+
+const seriesPosts = series
+  ? allPosts
+      .filter((candidate) => postRoute(candidate).locale === locale && candidate.data.series?.id === series.id)
+      .sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0))
+  : [];
+const seriesIndex = seriesPosts.findIndex((candidate) => candidate.id === post.id);
+const previousPost = seriesIndex > 0 ? seriesPosts[seriesIndex - 1] : undefined;
+const nextPost = seriesIndex >= 0 ? seriesPosts[seriesIndex + 1] : undefined;
+---
+
+<GlobalLayout title={post.data.title} description={post.data.description} locale={locale} languageLinks={languageLinks}>
+  <main>
+    <article>
+      <PostHero thumbnail={post.data.thumbnail} title={post.data.title} headings={headings} locale={locale}>
+        <PostHeader post={post} locale={locale} topics={topics} series={series} />
+      </PostHero>
+      <div class="mx-auto xl:grid xl:max-w-7xl xl:grid-cols-[minmax(0,1fr)_minmax(0,48rem)_minmax(0,1fr)]">
+        <PostAuthorCard locale={locale} author={post.data.author} />
+        <div class="xl:col-start-2">
+          <PostContent><Content components={{ img: PostImage, p: PostParagraph }} /></PostContent>
+        </div>
+        <PostToc headings={headings} locale={locale} />
+      </div>
+    </article>
+
+    <PostFooter
+      locale={locale}
+      seriesName={series?.data.name[locale]}
+      previousPost={previousPost}
+      nextPost={nextPost}
+    />
+  </main>
+</GlobalLayout>

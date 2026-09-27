@@ -1,0 +1,17 @@
+---
+import ProjectsPageContent from '@/components/projects/page-content.astro';
+import GlobalLayout from '@/layouts/global.astro';
+import { defaultLocale, locales, type LanguageLinks } from '@/lib/i18n';
+import { projectsPath } from '@/lib/routes';
+
+const languageLinks = Object.fromEntries(locales.map((locale) => [locale, projectsPath(locale)])) as LanguageLinks;
+---
+
+<GlobalLayout
+  title="projects"
+  description="Projects built by Jimin Park"
+  locale={defaultLocale}
+  languageLinks={languageLinks}
+>
+  <ProjectsPageContent locale={defaultLocale} />
+</GlobalLayout>

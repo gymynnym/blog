@@ -1,0 +1,37 @@
+---
+import { type Locale } from '@/lib/i18n';
+import { postsPath, projectsPath } from '@/lib/routes';
+
+interface Topic {
+  slug: string;
+  name: string;
+}
+
+interface Props {
+  topic: Topic;
+  locale: Locale;
+  tab: 'posts' | 'projects';
+  variant?: 'default' | 'overlay';
+}
+
+const { topic, locale, tab, variant = 'default' } = Astro.props;
+const listPath = tab === 'posts' ? postsPath(locale) : projectsPath(locale);
+const href = `${listPath}?topic=${encodeURIComponent(topic.slug)}`;
+---
+
+<a
+  href={href}
+  class:list={[
+    'flex items-center gap-1 rounded-sm border px-1 py-1 text-sm backdrop-blur-md transition-colors',
+    variant === 'overlay'
+      ? 'border-transparent bg-black/10 text-white hover:bg-black/30'
+      : 'bg-background/20 hover:bg-muted/20 hover:text-muted-foreground',
+  ]}
+>
+  <img
+    class="size-5"
+    src={`https://pub-aa8d676a4cd044e385a97d8195986254.r2.dev/icons/${topic.slug}.svg`}
+    alt={topic.name}
+  />
+  {topic.name}
+</a>

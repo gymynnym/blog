@@ -1,0 +1,38 @@
+---
+import GlobalLayout from '@/layouts/global.astro';
+import PostList from '@/components/posts/list.astro';
+import PostListItem from '@/components/posts/list-item.astro';
+import TopicFilter from '@/components/topics/filter.astro';
+import { locales, ui, type LanguageLinks, type Locale } from '@/lib/i18n';
+import { publishedPosts } from '@/lib/posts';
+import { postsPath } from '@/lib/routes';
+
+export function getStaticPaths() {
+  return locales.map((lang) => ({ params: { lang }, props: { lang } }));
+}
+
+const { lang } = Astro.props as { lang: Locale };
+const posts = await publishedPosts(lang);
+const languageLinks = Object.fromEntries(locales.map((locale) => [locale, postsPath(locale)])) as LanguageLinks;
+const labels = ui[lang];
+---
+
+<GlobalLayout title={labels.posts} locale={lang} languageLinks={languageLinks}>
+  <main class="mx-auto max-w-6xl space-y-8 p-8">
+    <h2 class="font-mono text-2xl font-medium">posts:</h2>
+    <TopicFilter locale={lang} />
+    <section>
+      {
+        posts.length === 0 ? (
+          <p>{labels.noPosts}</p>
+        ) : (
+          <PostList>
+            {posts.map((post) => (
+              <PostListItem post={post} locale={lang} />
+            ))}
+          </PostList>
+        )
+      }
+    </section>
+  </main>
+</GlobalLayout>

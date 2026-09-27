@@ -1,0 +1,11 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+type Props = HTMLAttributes<'p'>;
+
+const content = await Astro.slots.render('default');
+// Markdown wraps images in paragraphs, but HTML does not allow figures inside <p>.
+const Tag = /<figure(?:\s|>)/i.test(content) ? 'div' : 'p';
+---
+
+<Tag {...Astro.props} set:html={content} />

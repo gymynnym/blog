@@ -1,0 +1,77 @@
+---
+import { getEntry } from 'astro:content';
+import { formatDate, type Locale } from '@/lib/i18n';
+import { postRoute, type Post } from '@/lib/posts';
+import { postPath, seriesPath } from '@/lib/routes';
+import { resolveTopics } from '@/lib/topics';
+import TopicBadge from '@/components/topics/badge.astro';
+
+interface Props {
+  post: Post;
+  locale: Locale;
+}
+
+const { post, locale } = Astro.props;
+const { slug } = postRoute(post);
+const topics = await resolveTopics(post.data.topics);
+const series = post.data.series ? await getEntry(post.data.series) : undefined;
+---
+
+<li
+  data-topics={topics.map((topic) => topic.slug).join(' ')}
+  data-series={series?.data.slug}
+  data-series-order={post.data.seriesOrder}
+  class="group bg-card hover:bg-muted/20 grid gap-4 rounded-lg border p-3 transition-colors md:grid-cols-[20rem_minmax(0,1fr)]"
+>
+  <a href={postPath(locale, slug)} class="bg-muted aspect-video overflow-hidden rounded-md border">
+    {
+      post.data.thumbnail ? (
+        <img
+          src={post.data.thumbnail}
+          alt={post.data.title}
+          class="size-full object-cover object-center transition-transform duration-300 group-hover:scale-[1.02]"
+          loading="lazy"
+        />
+      ) : (
+        <span class="text-muted-foreground flex size-full items-center justify-center font-mono text-sm">post</span>
+      )
+    }
+  </a>
+
+  <div class="flex min-w-0 flex-col gap-3 p-1 md:p-2">
+    <div class="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+      <time datetime={post.data.publishedAt.toISOString()}>{formatDate(post.data.publishedAt, locale)}</time>
+      {
+        series && (
+          <>
+            <span>·</span>
+            <a href={seriesPath(locale, series.data.slug)} class="hover:text-foreground transition-colors">
+              {series.data.name[locale]}
+            </a>
+          </>
+        )
+      }
+    </div>
+
+    <div class="space-y-1">
+      <h2>
+        <a
+          href={postPath(locale, slug)}
+          class="hover:text-muted-foreground text-xl leading-tight font-semibold text-balance transition-colors"
+          >{post.data.title}</a
+        >
+      </h2>
+      <p class="text-muted-foreground line-clamp-2 text-sm leading-6">{post.data.description}</p>
+    </div>
+
+    {
+      topics.length > 0 && (
+        <div class="mt-auto flex flex-wrap gap-1.5 pt-2">
+          {topics.map((topic) => (
+            <TopicBadge locale={locale} topic={topic} tab="posts" />
+          ))}
+        </div>
+      )
+    }
+  </div>
+</li>

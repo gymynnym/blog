@@ -1,0 +1,95 @@
+---
+import { Image } from 'astro:assets';
+import jpFlag from '@/assets/icons/flags/jp.svg';
+import krFlag from '@/assets/icons/flags/kr.svg';
+import usFlag from '@/assets/icons/flags/us.svg';
+import { locales, type LanguageLinks, type Locale } from '@/lib/i18n';
+import { homePath, postsPath, projectsPath } from '@/lib/routes';
+
+interface Props {
+  locale: Locale;
+  languageLinks?: LanguageLinks;
+}
+
+const { locale, languageLinks = {} } = Astro.props;
+const navLinks = [
+  { name: 'posts', href: postsPath(locale) },
+  { name: 'projects', href: projectsPath(locale) },
+];
+const flagIcons = {
+  ko: krFlag,
+  en: usFlag,
+  ja: jpFlag,
+};
+const languageTargets = Object.fromEntries(
+  locales.map((language) => [language, languageLinks[language] ?? postsPath(language)]),
+) as Record<Locale, string>;
+const currentPath = Astro.url.pathname.replace(/\/$/, '') || '/';
+const currentSection = navLinks.find(
+  ({ name, href }) => currentPath === href || currentPath.endsWith(`/${name}`) || currentPath.includes(`/${name}/`),
+)?.name;
+---
+
+<header class="bg-background absolute top-0 z-50 h-14 w-full border-b font-mono">
+  <div class="container mx-auto flex h-14 items-center gap-4 px-8">
+    <h1>
+      <a href={homePath(locale)} class="flex h-14 items-center gap-2" aria-label="gymynnym blog home">
+        <img src="https://avatars.githubusercontent.com/u/118962415" alt="" class="size-6" />
+        <span class="bg-secondary hidden h-4 w-0.5 sm:block" aria-hidden="true"></span>
+        <span class="hidden font-medium sm:inline">blog</span>
+      </a>
+    </h1>
+    <nav class="ml-auto flex items-center gap-4 text-sm">
+      {
+        navLinks.map(({ name, href }) => (
+          <a
+            href={href}
+            aria-current={currentSection === name ? 'page' : undefined}
+            class:list={[
+              'hover:text-muted-foreground transition-colors',
+              { 'underline decoration-1 underline-offset-4': currentSection === name },
+            ]}
+          >
+            {name}
+          </a>
+        ))
+      }
+      <details class="relative">
+        <summary class="flex cursor-pointer list-none items-center gap-2 uppercase">
+          <Image src={flagIcons[locale]} alt="" class="size-4 object-cover" />
+          {locale}
+        </summary>
+        <ul class="bg-background absolute top-full right-0 z-10 mt-2 min-w-24 border p-1">
+          {
+            locales.map((language) => (
+              <li>
+                <a
+                  href={languageTargets[language]}
+                  data-language-link
+                  aria-current={language === locale ? 'page' : undefined}
+                  class:list={[
+                    'hover:bg-muted flex items-center gap-2 px-2 py-1.5 uppercase transition-colors',
+                    { 'font-semibold': language === locale },
+                  ]}
+                >
+                  <Image src={flagIcons[language]} alt="" class="size-4 object-cover" />
+                  {language}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </details>
+    </nav>
+  </div>
+</header>
+
+<script>
+  if (window.location.search) {
+    for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-language-link]')) {
+      const url = new URL(link.href);
+      url.search = window.location.search;
+      link.href = url.pathname + url.search;
+    }
+  }
+</script>

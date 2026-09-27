@@ -1,0 +1,17 @@
+---
+import ProjectsPageContent from '@/components/projects/page-content.astro';
+import GlobalLayout from '@/layouts/global.astro';
+import { locales, type LanguageLinks, type Locale } from '@/lib/i18n';
+import { projectsPath } from '@/lib/routes';
+
+export function getStaticPaths() {
+  return locales.map((lang) => ({ params: { lang }, props: { lang } }));
+}
+
+const { lang } = Astro.props as { lang: Locale };
+const languageLinks = Object.fromEntries(locales.map((locale) => [locale, projectsPath(locale)])) as LanguageLinks;
+---
+
+<GlobalLayout title="projects" description="Projects built by Jimin Park" locale={lang} languageLinks={languageLinks}>
+  <ProjectsPageContent locale={lang} />
+</GlobalLayout>

@@ -1,0 +1,57 @@
+---
+import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+import PostList from '@/components/posts/list.astro';
+import PostListItem from '@/components/posts/list-item.astro';
+import GlobalLayout from '@/layouts/global.astro';
+import { locales, ui, type LanguageLinks, type Locale } from '@/lib/i18n';
+import { publishedPosts } from '@/lib/posts';
+import { seriesPath } from '@/lib/routes';
+
+export async function getStaticPaths() {
+  const posts = await publishedPosts();
+  const usedSeriesIds = new Set(posts.flatMap((post) => (post.data.series ? [post.data.series.id] : [])));
+  if (usedSeriesIds.size === 0) return [];
+
+  const allSeries = await getCollection('series');
+
+  return allSeries
+    .filter((series) => usedSeriesIds.has(series.id))
+    .flatMap((series) =>
+      locales.map((lang) => ({
+        params: { lang, slug: series.data.slug },
+        props: { lang, series },
+      })),
+    );
+}
+
+const { lang, series } = Astro.props as {
+  lang: Locale;
+  series: CollectionEntry<'series'>;
+};
+const posts = (await publishedPosts(lang))
+  .filter((post) => post.data.series?.id === series.id)
+  .sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
+const languageLinks = Object.fromEntries(
+  locales.map((locale) => [locale, seriesPath(locale, series.data.slug)]),
+) as LanguageLinks;
+const labels = ui[lang];
+---
+
+<GlobalLayout title={series.data.name[lang]} locale={lang} languageLinks={languageLinks}>
+  <main>
+    {series.data.thumbnail && <img src={series.data.thumbnail} alt={series.data.name[lang]} />}
+    <h1>{labels.series}: {series.data.name[lang]}</h1>
+    {
+      posts.length === 0 ? (
+        <p>{labels.noPosts}</p>
+      ) : (
+        <PostList>
+          {posts.map((post) => (
+            <PostListItem post={post} locale={lang} />
+          ))}
+        </PostList>
+      )
+    }
+  </main>
+</GlobalLayout>

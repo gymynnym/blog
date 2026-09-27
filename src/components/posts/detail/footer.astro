@@ -1,0 +1,74 @@
+---
+import type { Locale } from '@/lib/i18n';
+import { ui } from '@/lib/i18n';
+import { postRoute, type Post } from '@/lib/posts';
+import { postPath } from '@/lib/routes';
+
+interface Props {
+  locale: Locale;
+  seriesName?: string;
+  previousPost?: Post;
+  nextPost?: Post;
+}
+
+const { locale, seriesName, previousPost, nextPost } = Astro.props;
+const labels = ui[locale];
+const repo = import.meta.env.PUBLIC_GISCUS_REPO;
+const repoId = import.meta.env.PUBLIC_GISCUS_REPO_ID;
+const category = import.meta.env.PUBLIC_GISCUS_CATEGORY;
+const categoryId = import.meta.env.PUBLIC_GISCUS_CATEGORY_ID;
+const giscus = repo && repoId && category && categoryId ? { repo, repoId, category, categoryId } : undefined;
+---
+
+<footer class="mx-auto max-w-3xl px-6 pb-16">
+  {
+    seriesName && (previousPost || nextPost) && (
+      <nav aria-label={seriesName} class="grid gap-3 border-t py-8 text-sm sm:grid-cols-2">
+        {previousPost && (
+          <a
+            href={postPath(locale, postRoute(previousPost).slug)}
+            class="hover:text-muted-foreground transition-colors"
+          >
+            {labels.previousPost}: {previousPost.data.title}
+          </a>
+        )}
+        {nextPost && (
+          <a
+            href={postPath(locale, postRoute(nextPost).slug)}
+            class="hover:text-muted-foreground text-right transition-colors sm:col-start-2"
+          >
+            {labels.nextPost}: {nextPost.data.title}
+          </a>
+        )}
+      </nav>
+    )
+  }
+
+  {
+    giscus && (
+      <section data-post-comments class="border-t pt-10">
+        <h2 class="mb-6 font-mono text-xl font-medium">{labels.comments}:</h2>
+        <div class="giscus">
+          <script
+            is:inline
+            src="https://giscus.app/client.js"
+            data-repo={giscus.repo}
+            data-repo-id={giscus.repoId}
+            data-category={giscus.category}
+            data-category-id={giscus.categoryId}
+            data-mapping="pathname"
+            data-strict="1"
+            data-reactions-enabled="1"
+            data-emit-metadata="0"
+            data-input-position="bottom"
+            data-theme="light_protanopia"
+            data-lang={locale}
+            data-loading="lazy"
+            crossorigin="anonymous"
+            async
+          />
+        </div>
+      </section>
+    )
+  }
+</footer>

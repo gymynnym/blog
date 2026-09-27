@@ -1,0 +1,93 @@
+---
+import { Image } from 'astro:assets';
+import githubLogo from '@/assets/icons/logos/github.svg';
+import zennLogo from '@/assets/icons/logos/zenn.svg';
+import { ui, type Locale } from '@/lib/i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+const profile = [
+  { label: 'name', value: '박지민(Jimin Park)' },
+  { label: 'username', value: 'gymynnym', href: 'https://github.com/gymynnym' },
+  { label: 'email', value: 'gymynnym@gmail.com', href: 'mailto:gymynnym@gmail.com' },
+  { label: 'country', value: '🇰🇷' },
+  { label: 'interests', value: 'dev, singularity' },
+];
+---
+
+<main class="mx-auto max-w-5xl px-6 py-14 sm:px-8 sm:py-20 lg:py-24">
+  <div class="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(21rem,0.82fr)] lg:items-start lg:gap-12">
+    <section class="lg:py-5" aria-labelledby="home-title">
+      <h1 id="home-title" class="font-mono text-3xl font-medium tracking-tight sm:text-4xl">blog: gymynnym</h1>
+      <p class="text-muted-foreground mt-5 max-w-lg text-base leading-7">{ui[locale].blogDescription}</p>
+
+      <nav class="mt-8 flex flex-wrap gap-2" aria-label="Profile links">
+        <a
+          href="https://github.com/gymynnym"
+          class="bg-foreground text-background flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"
+          target="_blank"
+          rel="me noreferrer"
+        >
+          <Image src={githubLogo} alt="" class="size-4" />
+          GitHub
+        </a>
+        <a
+          href="https://zenn.dev/gymynnym"
+          class="bg-background hover:bg-muted flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+          target="_blank"
+          rel="me noreferrer"
+        >
+          <Image src={zennLogo} alt="" class="size-5" />
+          Zenn
+        </a>
+      </nav>
+    </section>
+
+    <section
+      class="group bg-card hover:bg-muted/20 overflow-hidden rounded-lg border transition-colors"
+      aria-labelledby="whoami-title"
+    >
+      <div class="bg-muted/20 flex h-10 items-center border-b px-4" aria-hidden="true">
+        <div class="flex gap-1.5">
+          <span class="bg-border size-2.5 rounded-full"></span>
+          <span class="bg-border size-2.5 rounded-full"></span>
+          <span class="bg-border size-2.5 rounded-full"></span>
+        </div>
+      </div>
+
+      <div class="p-5 font-mono">
+        <h2 id="whoami-title" class="text-sm font-medium">
+          <span class="text-muted-foreground mr-2" aria-hidden="true">$</span>whoami
+        </h2>
+
+        <dl class="mt-5 space-y-2 text-sm leading-6">
+          {
+            profile.map(({ label, value, href }) => (
+              <div class="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3">
+                <dt class="text-muted-foreground">{label}:</dt>
+                <dd class="min-w-0 font-medium">
+                  {href ? (
+                    <a
+                      href={href}
+                      class="decoration-muted-foreground/60 hover:text-muted-foreground break-words underline-offset-4 transition-colors hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+                      target={href.startsWith('http') ? '_blank' : undefined}
+                      rel={href.startsWith('http') ? 'noreferrer' : undefined}
+                    >
+                      {value}
+                    </a>
+                  ) : (
+                    value
+                  )}
+                </dd>
+              </div>
+            ))
+          }
+        </dl>
+      </div>
+    </section>
+  </div>
+</main>

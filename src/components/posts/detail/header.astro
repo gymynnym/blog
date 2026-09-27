@@ -1,0 +1,52 @@
+---
+import { formatDate, ui, type Locale } from '@/lib/i18n';
+import type { Post } from '@/lib/posts';
+import { seriesPath } from '@/lib/routes';
+import type { Topic } from '@/lib/topics';
+import type { CollectionEntry } from 'astro:content';
+import TopicBadge from '@/components/topics/badge.astro';
+
+interface Props {
+  post: Post;
+  locale: Locale;
+  topics: Topic[];
+  series?: CollectionEntry<'series'>;
+}
+
+const { post, locale, topics, series } = Astro.props;
+const labels = ui[locale];
+---
+
+<header class="flex max-w-4xl flex-col items-center gap-4 text-center">
+  <p class="text-sm tracking-[0.2em] uppercase">
+    <span
+      >{labels.publishedAt}: <time datetime={post.data.publishedAt.toISOString()}
+        >{formatDate(post.data.publishedAt, locale)}</time
+      ></span
+    >
+    {
+      post.data.updatedAt && (
+        <>
+          {' '}
+          ·{' '}
+          <span>
+            {labels.updatedAt}:{' '}
+            <time datetime={post.data.updatedAt.toISOString()}>{formatDate(post.data.updatedAt, locale)}</time>
+          </span>
+        </>
+      )
+    }
+  </p>
+  {
+    series && (
+      <a href={seriesPath(locale, series.data.slug)} class="text-sm transition-opacity hover:opacity-70">
+        {series.data.name[locale]}
+      </a>
+    )
+  }
+  <h1 class="text-4xl font-semibold text-balance sm:text-6xl">{post.data.title}</h1>
+  <p class="max-w-2xl text-balance opacity-85">{post.data.description}</p>
+  <div class="flex flex-wrap items-center justify-center gap-1.5 text-sm">
+    {topics.map((topic) => <TopicBadge topic={topic} locale={locale} tab="posts" variant="overlay" />)}
+  </div>
+</header>

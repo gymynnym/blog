@@ -1,0 +1,68 @@
+---
+import type { MarkdownHeading } from 'astro';
+import { ui, type Locale } from '@/lib/i18n';
+
+interface Props {
+  headings: MarkdownHeading[];
+  locale: Locale;
+}
+
+const { headings, locale } = Astro.props;
+const toc = headings.filter(({ depth }) => depth > 1);
+const topDepth = Math.min(...toc.map(({ depth }) => depth));
+---
+
+{
+  toc.length > 0 && (
+    <post-toc class="hidden xl:block">
+      <aside class="sticky top-0 max-h-[calc(100vh-6rem)] overflow-y-auto px-4 py-8">
+        <p class="mb-3 -ml-1 inline-block rounded-sm font-mono text-base font-medium">{ui[locale].contents}</p>
+        <nav aria-label={ui[locale].contents}>
+          <ol class="space-y-1">
+            {toc.map((heading) => (
+              <li class:list={[heading.depth > topDepth && 'pl-3']}>
+                <a
+                  href={`#${heading.slug}`}
+                  class="text-muted-foreground hover:text-foreground aria-[current=location]:text-foreground block py-1 text-sm transition-colors aria-[current=location]:underline"
+                >
+                  {heading.text}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      </aside>
+    </post-toc>
+  )
+}
+
+<script>
+  class PostToc extends HTMLElement {
+    connectedCallback() {
+      const links = [...this.querySelectorAll<HTMLAnchorElement>('a')];
+      const entries = links.flatMap((link) => {
+        const heading = document.getElementById(decodeURIComponent(link.hash.slice(1)));
+        return heading ? [{ link, heading }] : [];
+      });
+
+      const update = () => {
+        let active = entries[0];
+
+        for (const entry of entries) {
+          if (entry.heading.getBoundingClientRect().top > 160) break;
+          active = entry;
+        }
+
+        entries.forEach(({ link }) => {
+          if (link === active?.link) link.setAttribute('aria-current', 'location');
+          else link.removeAttribute('aria-current');
+        });
+      };
+
+      update();
+      document.addEventListener('scroll', update, { passive: true });
+    }
+  }
+
+  if (!customElements.get('post-toc')) customElements.define('post-toc', PostToc);
+</script>
