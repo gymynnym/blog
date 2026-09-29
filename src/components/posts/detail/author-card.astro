@@ -14,61 +14,57 @@ const { locale, author = 'gymynnym' } = Astro.props;
 ---
 
 <aside class="sticky top-0 hidden self-start px-4 py-8 xl:block">
-  <div class="bg-card rounded-lg border p-4">
-    <p class="text-muted-foreground mb-3 font-mono text-xs">{ui[locale].writtenBy}</p>
-
-    {
-      author !== 'gymynnym' ? (
-        <p class="font-medium">@{author}</p>
-      ) : (
-        <>
-          <div class="flex items-center gap-3">
-            <img
-              src="https://avatars.githubusercontent.com/u/118962415?v=4"
-              alt="Jimin Park"
-              class="size-12 rounded-full"
-              loading="lazy"
-            />
-            <div class="min-w-0">
-              <p class="font-medium">Jimin Park</p>
-              <p class="text-muted-foreground text-sm">@gymynnym</p>
-            </div>
+  {
+    author !== 'gymynnym' ? (
+      <p class="font-medium">@{author}</p>
+    ) : (
+      <>
+        <div class="flex items-center gap-3">
+          <img
+            src="https://avatars.githubusercontent.com/u/118962415?v=4"
+            alt="Jimin Park"
+            class="size-12 rounded-full"
+            loading="lazy"
+          />
+          <div class="min-w-0">
+            <p class="font-medium">Jimin Park</p>
+            <p class="text-muted-foreground text-sm">@gymynnym</p>
           </div>
+        </div>
 
-          <p class="text-muted-foreground mt-4 flex items-center gap-2 text-sm">
-            <MapPin class="size-4" />
-            Seoul/Asia
-          </p>
-          <a
-            href="mailto:gymynnym@gmail.com"
-            class="text-muted-foreground hover:text-foreground mt-2 flex items-center gap-2 text-sm transition-colors"
-          >
-            <Mail class="size-4" />
-            gymynnym@gmail.com
-          </a>
+        <p class="text-muted-foreground mt-4 flex items-center gap-2 text-sm">
+          <MapPin class="size-4" />
+          Seoul/Asia
+        </p>
+        <a
+          href="mailto:gymynnym@gmail.com"
+          class="text-muted-foreground hover:text-foreground mt-2 flex items-center gap-2 text-sm transition-colors"
+        >
+          <Mail class="size-4" />
+          gymynnym@gmail.com
+        </a>
 
-          <a
-            href="https://github.com/gymynnym"
-            class="bg-foreground text-background mt-4 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"
-            target="_blank"
-            rel="me noreferrer"
-          >
-            <Image src={githubLogo} alt="" class="size-4" />
-            GitHub
-          </a>
+        <a
+          href="https://github.com/gymynnym"
+          class="bg-foreground text-background mt-4 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"
+          target="_blank"
+          rel="me noreferrer"
+        >
+          <Image src={githubLogo} alt="" class="size-4" />
+          GitHub
+        </a>
 
-          <a
-            href="https://zenn.dev/gymynnym"
-            class="bg-background hover:bg-muted mt-2 flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
-            target="_blank"
-            rel="me noreferrer"
-            aria-label="Zenn"
-          >
-            <Image src={zennLogo} alt="Zenn" class="size-5" />
-            Zenn
-          </a>
-        </>
-      )
-    }
-  </div>
+        <a
+          href="https://zenn.dev/gymynnym"
+          class="bg-background hover:bg-muted mt-2 flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+          target="_blank"
+          rel="me noreferrer"
+          aria-label="Zenn"
+        >
+          <Image src={zennLogo} alt="Zenn" class="size-5" />
+          Zenn
+        </a>
+      </>
+    )
+  }
 </aside>

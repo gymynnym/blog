@@ -1,0 +1,46 @@
+---
+import { ChevronDown } from '@lucide/astro';
+import { ui, type Locale } from '@/lib/i18n';
+import { postRoute, type Post } from '@/lib/posts';
+import { postPath } from '@/lib/routes';
+
+interface Props {
+  name: string;
+  posts: Post[];
+  currentPostId: string;
+  locale: Locale;
+}
+
+const { name, posts, currentPostId, locale } = Astro.props;
+---
+
+<details class="group bg-background/50 sticky top-4 z-20 mx-4 mt-4 rounded-md border backdrop-blur">
+  <summary
+    class="focus-visible:ring-ring flex cursor-pointer list-none items-center gap-2 px-4 py-4 text-sm focus-visible:ring-2 focus-visible:ring-inset [&::-webkit-details-marker]:hidden"
+  >
+    <span class="text-muted-foreground shrink-0 font-mono">{ui[locale].series}</span>
+    <span class="min-w-0 flex-1 truncate font-medium">{name}</span>
+    <ChevronDown
+      aria-hidden="true"
+      class="size-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none"
+    />
+  </summary>
+  <nav aria-label={`${ui[locale].series}: ${name}`} class="max-h-[60dvh] overflow-y-auto overscroll-contain px-6 pb-2">
+    <ol class="space-y-1">
+      {
+        posts.map((post, index) => (
+          <li class="flex gap-1.5 py-1 text-sm">
+            {index + 1}.
+            <a
+              href={postPath(locale, postRoute(post).slug)}
+              aria-current={post.id === currentPostId ? 'page' : undefined}
+              class="text-muted-foreground hover:text-foreground aria-[current=page]:text-foreground wrap-break-words block transition-colors aria-[current=page]:underline"
+            >
+              {post.data.title}
+            </a>
+          </li>
+        ))
+      }
+    </ol>
+  </nav>
+</details>

@@ -8,6 +8,7 @@ import PostHeader from '@/components/posts/detail/header.astro';
 import PostHero from '@/components/posts/detail/hero.astro';
 import PostImage from '@/components/posts/detail/image.astro';
 import PostParagraph from '@/components/posts/detail/paragraph.astro';
+import PostSeries from '@/components/posts/detail/series.astro';
 import PostToc from '@/components/posts/detail/toc.astro';
 import GlobalLayout from '@/layouts/global.astro';
 import type { Locale } from '@/lib/i18n';
@@ -49,7 +50,12 @@ const nextPost = seriesIndex >= 0 ? seriesPosts[seriesIndex + 1] : undefined;
       </PostHero>
       <div class="mx-auto xl:grid xl:max-w-7xl xl:grid-cols-[minmax(0,1fr)_minmax(0,48rem)_minmax(0,1fr)]">
         <PostAuthorCard locale={locale} author={post.data.author} />
-        <div class="xl:col-start-2">
+        <div class="min-w-0 xl:col-start-2">
+          {
+            series && (
+              <PostSeries name={series.data.name[locale]} posts={seriesPosts} currentPostId={post.id} locale={locale} />
+            )
+          }
           <PostContent><Content components={{ img: PostImage, p: PostParagraph }} /></PostContent>
         </div>
         <PostToc headings={headings} locale={locale} />
