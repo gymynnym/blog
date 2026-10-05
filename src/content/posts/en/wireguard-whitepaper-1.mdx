@@ -1,0 +1,37 @@
+---
+title: 'Introduction and Motivation'
+description: 'WireGuard is a modern kernel network tunneling solution designed for security, performance, and ease of use at OSI Layer 3. This article compares its design with IPsec and OpenVPN.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-13T15:24:14.580446'
+updatedAt: '2025-12-19T22:57:20.855053'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 1
+author: 'gymynnym'
+draft: false
+---
+
+# Introduction and Motivation
+
+**WireGuard** is a modern kernel network tunneling solution. It operates at OSI Layer 3 (the network layer) and is designed to offer security, high performance, and ease of use.
+
+## IPsec vs WireGuard
+
+The standard choice for encrypted tunneling on Linux is **IPsec**, a suite of security protocols. On Linux, the `xfrm` framework handles packet encryption, decryption, integrity checking, and tunneling in the kernel.  
+The IPsec architecture does not itself include a **key exchange mechanism**; it generally uses **IKEv2** for key exchange. On Linux, an IKE daemon such as `strongSwan` implements **IKEv2** in user space and installs the resulting configuration into the kernel’s `xfrm` through `netlink`.
+
+Separating key exchange from transport encryption is a **sensible separation** from a semantic perspective, but the number of components adds **complexity** for users.
+
+**WireGuard**, by contrast, removes this separation and provides encrypted tunneling through a single virtual interface, such as `wg0`. Standard network utilities (`ip`, `ifconfig`) work as usual, and packets passing through the interface are guaranteed to be authenticated and encrypted. This simple, intuitive model makes configuration and operation much easier than with IPsec.
+
+> However, it is worth clearly recognizing that **IPsec** has an academically sound layered architecture, while **WireGuard** is an **engineering solution** that crosses layer boundaries and has theoretical shortcomings.
+
+## OpenVPN vs WireGuard
+
+Another widely used encrypted tunneling solution is **OpenVPN**. Its TUN/TAP virtual interfaces provide an interface-based model similar to WireGuard. However, because it runs in user space, packets must travel between kernel and user space multiple times, reducing performance. OpenVPN also uses TLS and has a large codebase, which introduces **potential security vulnerabilities**.
+
+**WireGuard** is implemented as a kernel module and deliberately limits protocol and cipher-suite agility. It uses a variant of Trevor Perrin’s `Noise`, with modern algorithms including `Curve25519` for key exchange, `ChaCha20` for symmetric encryption, and `Poly1305` for integrity verification. These choices balance simplicity, performance, and security.
+
+## Conclusion
+
+**WireGuard** offers excellent performance, simple configuration, a small codebase, and modern cryptography, making it a practical solution for many environments. It combines key exchange and transport encryption into one mechanism and adopts a single virtual interface instead of a policy layer. Although this departs from the layering principles of traditional security architectures, it performs exceptionally well at meeting practical requirements.

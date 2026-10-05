@@ -1,0 +1,64 @@
+---
+title: 'Basic Usage'
+description: 'Add a wg0 WireGuard interface to a Linux system with an eth0 interface and public IP 192.95.5.69, assign tunnel IP 10.192.122.3/24, and configure routing and peers with ip and wg.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-13T17:19:15.208700'
+updatedAt: '2025-12-18T18:36:21.020632'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 4
+author: 'gymynnym'
+draft: false
+---
+
+# Basic Usage
+
+## Assumed Environment
+
+Assume a Linux system connected to the internet through one physical interface, `eth0`, with public IP **192.95.5.69**. Add a WireGuard interface named `wg0` and assign it tunnel IP **10.192.122.3/24**.
+
+## Add the `wg0` Interface with `ip`
+
+```sh
+$ ip link add dev wg0 type wireguard # Create the wg0 WireGuard interface
+$ ip address add dev wg0 10.192.122.3/24 # Assign tunnel IP 10.192.122.3/24 to wg0
+$ ip route add 10.0.0.0/8 dev wg0 # Route 10.0.0.0/8 through wg0
+$ ip address show # Check the result
+1: lo: <LOOPBACK> mtu 65536
+   inet 127.0.0.1/8 scope host lo
+2: eth0: <BROADCAST> mtu 1500
+   inet 192.95.5.69/24 scope global eth0
+3: wg0: <POINTOPOINT,NOARP> mtu 1420
+   inet 10.192.122.3/24 scope global wg0
+```
+
+These commands create the `wg0` network interface and configure its IP address and routing.
+
+## Configure the Cryptokey Routing Table with `wg`
+
+```sh
+$ wg setconf wg0 configuration-1.conf # Read the configuration file and apply it to wg0
+$ wg show wg0 # Check the applied configuration
+interface: wg0
+  public key: HIgo...8ykw
+  private key: yAnz...fBmk
+  listening port: 41414
+peer: xTIB...p8Dg
+  allowed ips: 10.192.124.0/24, 10.192.122.3/32
+peer: TrMv...WXX0
+  allowed ips: 192.168.0.0/16, 10.192.122.4/32
+peer: gN65...z6EA
+  allowed ips: 10.10.10.230/32
+  endpoint: 192.95.5.70:54421
+```
+
+These commands apply `configuration-1.conf` to `wg0`. The file defines peers, AllowedIPs, keys, endpoints, ports, and other settings.
+
+### Activate the Interface and Check Connectivity
+
+```sh
+$ ip link set wg0 up # Bring up the wg0 interface
+$ ping 10.10.10.230 # Check connectivity
+```
+
+When this system sends a packet to **10.10.10.230**, it travels through `wg0`. The interface **encrypts** it using the security session associated with public key `gN65...z6EA`, then sends the encrypted, encapsulated packet over UDP to **192.95.5.70:54421**. When `wg0` **receives** a packet from **10.10.10.230**, the administrator can be certain it came from the peer with public key `gN65...z6EA`.

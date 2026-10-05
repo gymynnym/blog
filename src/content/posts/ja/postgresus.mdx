@@ -1,0 +1,137 @@
+---
+title: 'Postgresus：Postgresの反転術式'
+description: 'PostgresusはPostgreSQLの自動バックアップ用の無料オープンソース・セルフホストツールです。Docker Composeで導入し、スケジュール、保存先、保持期間、通知を設定します。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/Postgresus_%20Postgres%EC%9D%98%20%EB%B0%98%EC%A0%84%20%EC%88%A0%EC%8B%9D.png
+publishedAt: '2025-11-24T17:05:08.530542'
+updatedAt: '2025-11-25T01:28:11.541627+00:00'
+topics: ['postgresql', 'docker']
+author: 'gymynnym'
+draft: false
+---
+
+# Postgresus：Postgresの反転術式
+
+## Postgresusとは？
+
+> **原文：** Free, open source and self-hosted solution for automated PostgreSQL backups. With multiple storage options and notifications  
+> **翻訳**：複数の保存先と通知機能を備えた、PostgreSQL自動バックアップ用の無料オープンソース・セルフホストソリューション。
+
+[RostislavDugin/postgresus](https://github.com/RostislavDugin/postgresus)はPostgreSQLの自動バックアップツールで、主に次の機能があります。
+
+#### 1. スケジュールされたバックアップ
+
+指定した時刻にバックアップを実行できます。バランスのよい圧縮により、保存容量を4～8分の1に削減します。
+
+#### 2. 複数の保存先
+
+ローカルやS3、R2、Google Driveなどのクラウドを含む複数の保存先に対応します。保存先に応じたセキュリティオプションもあります。
+
+#### 3. スマート通知
+
+メール、Telegram、Slack、Discordなど、複数の経路で成功・失敗の通知を受け取れます。
+
+> ほかの機能は[Postgresus features](https://github.com/RostislavDugin/postgresus?tab=readme-ov-file#-features)をご覧ください。
+
+## Postgresusのインストール
+
+自動インストールスクリプトもありますが、Docker Composeに慣れているため、この記事ではそれを使います。
+
+```yml
+services:
+  my-postgres:
+    container_name: my-postgres
+    image: postgres:18
+    # more options
+  my-postgresus:
+    container_name: my-postgresus
+    image: rostislavdugin/postgresus:latest
+    ports:
+      - '4005:4005' # WebUI用ポート
+    volumes:
+      - ./postgresus/data:/postgresus-data # バックアップデータのマウント
+    depends_on:
+      - my-postgres # PostgreSQLへの依存
+```
+
+今回はPostgreSQL 18を使いました。  
+Postgresusコンテナーでは、WebUI用の**ポート**とバックアップデータ用の**ボリューム**を設定します。
+
+## Postgresusの使い方
+
+### 1. Postgresus WebUIにアクセスする
+
+ブラウザーで[http://yourhost:4005/](http://yourhost:4005/)を開きます。
+
+![Sign up admin.png](https://assets.akuk.in/blog/in-content/1763969003219_Signupadmin.webp 'Sign up admin')
+
+画面の案内に従って管理者アカウントを作成します。
+
+> **参考**：あなたのパスワードが[この一覧](https://en.wikipedia.org/wiki/List_of_the_most_common_passwords)にないことを願います。:)
+
+### 2. Workspaceを作成する
+
+![Create workspace.png](https://assets.akuk.in/blog/in-content/1763969211014_Createworkspace.webp 'Create worksapce')
+
+管理者アカウントの設定後に表示されるCreate workspaceをクリックします。
+
+> PostgresusのWorkspaceは、データベース、保存先、通知設定などを管理する単位です。
+
+### 3. バックアップを設定する
+
+![Add database for backup.png](https://assets.akuk.in/blog/in-content/1763969377463_Adddatabaseforbackup.webp 'Add database for backup')
+
+次にバックアップ対象のPostgreSQLを設定します。先ほどDocker Composeで定義したコンテナーを指定します。
+
+続いてバックアップ専用の読み取り専用ユーザーを作るか聞かれます。任意なので、ここではスキップします。
+
+![Add backup options.png](https://assets.akuk.in/blog/in-content/1763969560935_Addbackupoptions.webp 'Add backup options')
+
+対象の設定が終わったら、バックアップ自体を設定します。今回は次のようにします。
+
+- 毎日午前4時。
+- 失敗時は3回再試行。
+- 復元にはCPUを一つ使用。
+- 1か月間保持。
+- ローカル保存、暗号化なし。
+- 成功・失敗時に通知。
+
+### 4. 通知を設定する
+
+![Add notifier.png](https://assets.akuk.in/blog/in-content/1763969631838_Addnotifier.webp 'Add notifier')
+
+最後にNotifierを設定します。今回はDiscord Webhookで受け取るようにしました。SlackやTelegramなど、ほかのサービスも使えます。
+
+![Discord.png](https://assets.akuk.in/blog/in-content/1763969936544_Discord.webp 'Discordで確認した接続テストとバックアップ通知')
+
+![Postgres backups.png](https://assets.akuk.in/blog/in-content/1763969737239_Postgresbackups.webp 'Postgres backups')
+
+設定が終わると、上記のようにバックアップが実行され、一覧に追加されます。  
+削除、復元、ダウンロードを簡単に行えます。`Make backup right now`をクリックすれば、すぐにバックアップを作れます。
+
+## 結果
+
+```
+$ docker stats my-postgresus
+CONTAINER ID   NAME            CPU %     MEM USAGE / LIMIT
+............   my-postgresus   0.00%     77.63MiB / ...
+```
+
+アイドル時のCPUとメモリ使用量です。Postgresusはなかなか倹約家のようです。
+
+```
+├── docker-compose.yml
+└── postgresus
+    └── data
+        ├── backups
+        │   └── ...
+        ├── pgdata
+        ├── secret.key
+        └── temp
+```
+
+バックアップファイルも正常に確認できました。
+
+## おわりに
+
+これでデータは安全です！  
+次は物理ドライブのRAIDやバックアップを考える時間ですね……。

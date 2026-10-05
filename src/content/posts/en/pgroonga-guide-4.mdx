@@ -1,0 +1,148 @@
+---
+title: 'PGroonga Functions'
+description: 'Use PGroonga functions for advanced search conditions, relevance scoring, synonym-based query expansion, and HTML keyword highlighting.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/PGroonga%20%EA%B0%80%EC%9D%B4%EB%93%9C.png
+publishedAt: '2025-12-02T00:49:57.090312'
+updatedAt: '2025-12-03T23:38:31.342086'
+topics: ['postgresql', 'docker']
+series: 'pgroonga-guide'
+seriesOrder: 4
+author: 'gymynnym'
+draft: false
+---
+
+# PGroonga Functions
+
+### `pgroonga_condition()`: Advanced Search Conditions
+
+```sql
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@~ pgroonga_condition(
+	'첫 번째',
+	weights => ARRAY[2, 1],
+	index_name => 'articles_pgroonga_idx'
+);
+```
+
+`pgroonga_condition()` creates advanced search conditions and accepts options such as:
+
+- `keyword`: search keyword.
+- `weights`: an array of column weights. The example assigns 2 to `title` and 1 to `content`.
+- `index_name`: name of the PGroonga index to use.
+- `fuzzy_max_distance_ratio`: maximum distance ratio for fuzzy search (typo tolerance).
+- [Other options](https://pgroonga.github.io/reference/functions/pgroonga-condition.html#syntax).
+
+### `pgroonga_score()`: Search Result Relevance
+
+> The Korean example does not work properly with `TokenBigram`, so we use English data here. It works properly if you use the `Mecab-ko` tokenizer.
+
+```sql
+CREATE TABLE memos (
+  title text,
+  content text
+);
+
+CREATE INDEX pgroonga_memos_index ON memos
+USING pgroonga ((ARRAY[title, content]))
+
+INSERT INTO memos VALUES ('PostgreSQL', 'PostgreSQL is a relational database management system.');
+INSERT INTO memos VALUES ('Groonga', 'Groonga is the fast full text search engine optimized for Japanese.');
+INSERT INTO memos VALUES ('PGroonga', 'PGroonga is an extension for PostgreSQL to use Groonga as the index.');
+INSERT INTO memos VALUES ('command line', 'There is a groonga command.');
+```
+
+```sql
+SELECT *, pgroonga_score(tableoid, ctid) AS score
+FROM memos
+WHERE ARRAY[title, content] &@~ pgroonga_condition(
+  'PostgreSQL OR Groonga',
+  weights => ARRAY[2, 1],
+  index_name => 'pgroonga_memos_index'
+)
+ORDER BY score DESC;
+--     title     |                               content                                | score
+-- --------------+----------------------------------------------------------------------+-------
+--  PostgreSQL   | PostgreSQL is a relational database management system.               |     3
+--  Groonga      | Groonga is the fast full text search engine optimized for Japanese.  |     3
+--  PGroonga     | PGroonga is an extension for PostgreSQL to use Groonga as the index. |     2
+--  command line | There is a groonga command.                                          |     1
+```
+
+`pgroonga_score()` returns relevance as `double precision`. Pass `tableoid` and `ctid` as arguments.
+
+> You can also pass an index containing the primary key, but this is not recommended because performance is poor.
+
+Reading the example results in order:
+
+1. 2 (contains `PostgreSQL`) + 1 (contains `Groonga`) = 3.
+2. 1 (contains `Groonga`) = 3.
+3. 2 (contains `PostgreSQL`) = 2.
+4. 1 (contains `groonga`) = 1.
+
+Relevance is calculated using these expressions, and the resulting values can be used to sort search results by relevance.
+
+### `pgroonga_query_expand()`: Query Expansion with Synonyms
+
+```sql
+CREATE TABLE synonyms (
+  term text,
+  synonyms text[]
+);
+
+CREATE INDEX synonyms_term
+ON synonyms USING pgroonga (term pgroonga_text_term_search_ops_v2);
+
+INSERT INTO synonyms VALUES ('article', ARRAY['기사', '글', '논문']);
+```
+
+- The `synonyms` table manages the synonym dictionary.
+- The `synonyms_term` PGroonga index searches the `synonyms` dictionary.
+
+```sql
+SELECT pgroonga_query_expand('synonyms', 'term', 'synonyms', '첫 번째 article') AS query_expand;
+--             query_expand
+-- ------------------------------------
+--  첫 번째 ((기사) OR (글) OR (논문))
+```
+
+The query above shows how `article` is expanded using the synonym dictionary.
+
+```
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@~ pgroonga_query_expand(
+  'synonyms',
+  'term',
+  'synonyms',
+  '첫 번째 article'
+);
+--  id |    title     |          content
+-- --+--------------+----------------------------
+--   1 | 첫 번째 기사 | 이것은 첫 번째 기사입니다.
+```
+
+`pgroonga_query_expand()` expands a query using a synonym dictionary and accepts these arguments in order:
+
+- `table_name`: synonym dictionary table name.
+- `term_column_name`: column containing search terms.
+- `synonyms_column_name`: column containing synonym arrays.
+- `query`: query string to expand.
+
+### `pgroonga_snippet_html()`: HTML Keyword Highlighting
+
+```sql
+SELECT id, unnest(
+  pgroonga_snippet_html(
+    title,
+    pgroonga_query_extract_keywords('첫 번째')
+  )
+) AS highlighted_title
+FROM articles
+WHERE ARRAY[title, content] &@~ '첫 번째';
+--  id |                           highlighted_title
+-- ----+------------------------------------------------------------------------
+--   1 | <span class="keyword">첫</span> <span class="keyword">번째</span> 기사
+```
+
+- `pgroonga_snippet_html()` returns an array of strings with matching keywords wrapped in span tags.
+  - The example uses `unnest()` to flatten the array.
+- `pgroonga_query_extract_keywords()` extracts keywords from the supplied query.

@@ -1,0 +1,51 @@
+---
+title: 'What Is PGroonga?'
+description: 'Build a powerful search system using PostgreSQL alone. This series introduces PGroonga, which brings multilingual full-text search into PostgreSQL without operating an external search engine such as Elasticsearch.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/PGroonga%20%EA%B0%80%EC%9D%B4%EB%93%9C.png
+publishedAt: '2025-12-02T00:18:16.364413'
+updatedAt: '2025-12-02T01:04:53.346220'
+topics: ['postgresql', 'docker']
+series: 'pgroonga-guide'
+seriesOrder: 1
+author: 'gymynnym'
+draft: false
+---
+
+# What Is PGroonga?
+
+## Introduction
+
+This series explores how to build a powerful search system using **PostgreSQL** alone.  
+The goal is to solve the problem simply within PostgreSQL, without an external search engine such as Elasticsearch.
+
+## ElasticSearch vs PGroonga
+
+[**Elasticsearch**](https://www.elastic.co/elasticsearch) is a powerful **search engine** for quickly searching large datasets, with features such as horizontal scaling and unstructured document search. However, it requires a separate system to operate and maintain, and synchronizing data with a relational database can be complex. Configuration and tuning also have a steep learning curve for beginners.
+
+[**PGroonga**](https://pgroonga.github.io/) is a PostgreSQL **extension** that integrates [**Groonga**](https://groonga.org/) as an index engine to provide powerful multilingual full-text search within PostgreSQL. There is no separate search engine to operate and no data synchronization problem. Configuration is relatively straightforward, too. :)
+
+> **Groonga** is an inverted-index full-text search engine. Newly registered documents immediately appear in search results, and updates do not require read locks, making it suitable for real-time applications. As a column-oriented DBMS, it also excels at aggregation queries, complementing row-oriented systems such as MySQL and PostgreSQL. See [Characteristics of Groonga](https://groonga.org/docs/characteristic.html) for details.
+
+Of course, Elasticsearch is preferable in some cases:
+
+- You need horizontal scaling.
+- You need complex search features, such as pipelines or machine learning integration.
+- You need powerful distributed log/metrics analysis (ELK: Elasticsearch, Logstash, Kibana).
+- Your requirements explicitly mandate Elasticsearch. :(
+
+If your search system has a simple structure, PGroonga can be a pleasant choice for developers.
+
+## How PGroonga Works
+
+Full-text search through a PGroonga index proceeds as follows:
+
+1. **Normalize**: normalize the input string using techniques such as:
+   - Unify uppercase and lowercase.
+   - Handle whitespace and symbols.
+   - Unicode normalization.
+   - Remove unnecessary characters.
+2. **Tokenize**: split the normalized string into tokens.
+   - Choose a tokenizer suited to the language; for example, `Mecab` for Japanese.
+   - Example: `"postgresql 검색"` -> `["po", "os", "st", "tg", ... , "검색"]`.
+3. **Index lookup and comparison**: search PGroonga’s data using the generated tokens.
+4. **Return results**: return documents (records) that match the search conditions.

@@ -1,0 +1,269 @@
+---
+title: 'リモートサーバーのDockerへのアクセスと管理'
+description: 'macOSからSSHのUnixソケット転送とlazydockerでリモートDockerにアクセスし、ToriのエージェントとTUIクライアントでサーバーを監視します。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/%EC%9B%90%EA%B2%A9%20%EC%84%9C%EB%B2%84%EC%9D%98%20Docker%EC%97%90%20%EB%8C%80%ED%95%9C%20%EC%A0%91%EA%B7%BC%EA%B3%BC%20%EA%B4%80%EB%A6%AC.png
+publishedAt: '2026-02-18T14:18:58.520543'
+updatedAt: '2026-02-18T15:59:59.990044+00:00'
+topics: ['ssh', 'docker']
+author: 'gymynnym'
+draft: false
+---
+
+# リモートサーバーのDockerへのアクセスと管理
+
+## はじめに
+
+[macOSではDockerをネイティブに動かせない](/ja/posts/lean-development-environment#dockerの導入macosではdockerをネイティブに動かせない)ため、UbuntuのホームサーバーにDockerを入れてリモートで使っています。同じようなmacOSユーザーも多いと思います。この記事では、使っている道具や方法と、基本的な使い方を紹介します。
+
+## lazydocker：管理ツール
+
+Dockerの管理には[lazydocker](https://github.com/jesseduffield/lazydocker)を愛用しています。DockerとDocker Composeを管理するTUIで、[Dockge](https://github.com/louislam/dockge)や[Portainer](https://github.com/portainer/portainer)のような重いWebUIツールを使えない環境に適しています。
+
+![Lazydocker Demo](https://github.com/jesseduffield/lazydocker/raw/master/docs/resources/demo3.gif 'Lazydocker Demo')
+
+ただ、私の環境で使うには、次の理由から**ローカルシステムからDockerにアクセス**できる必要がありました。
+
+> SSHアドレスで試しましたが、パスワードなしのSSH鍵による接続は非対応でした。[関連Issue](https://github.com/jesseduffield/lazydocker/issues/559)への[機能追加PR](https://github.com/jesseduffield/lazydocker/pull/577)や、[解決したフォーク](https://github.com/peauc/lazydocker-ng)もあるようですが、なぜかPRがマージされていません。:(
+
+そこで、少し面倒ですが面白い方法を試します。
+
+### Unix Domain Socket
+
+まず、Dockerの通信に使われるUnixドメインソケットを見ていきます。
+
+通常の**TCP/IP**ソケット通信はネットワークを使い、`ip:port`で宛先を指定します。ローカル内だけの通信ならネットワークスタックを通る必要はなく、Unixでは**Unixドメインソケット**を使えます。
+
+**Unixドメインソケット**はネットワークスタックを通らず、`ip:port`の代わりに`.sock`ファイルのパスを使います。
+
+```sh
+$ ls -l docker.sock
+srw-rw---- 1 root docker 0 Jan  1 00:00 docker.sock
+```
+
+ファイル種別は`s`（socket）で、ファイルシステムの権限でアクセスを制御できます。次に、外部からこの`docker.sock`へアクセスする方法を見ます。
+
+### SSHローカル転送
+
+SSHの**ローカル転送**は、**SSHトンネルでストリームを転送**する機能です。TCPポートやUnixドメインソケットを転送し、リモートのサービスやソケットがローカルで動いているように扱えます。
+
+```sh
+$ ssh -N -L /tmp/docker.sock:/var/run/docker.sock myuser@myhost
+```
+
+`-L`でローカル転送し、`-N`でリモートコマンドやシェルを実行せず、トンネルだけを維持します。これでリモートの`/var/run/docker.sock`をローカルの`/tmp/docker.sock`へ転送できます。
+
+毎回入力するのは面倒なので、`~/.ssh/config`に設定します。
+
+```
+Host *
+	ControlMaster auto
+	ControlPath ~/.ssh/cm-%r@%h:%p
+	ControlPersist 10m
+...
+```
+
+この設定はSSH多重化を有効にします。
+
+> SSH多重化は、**一つのTCP接続を複数のSSHセッションで共有**する技術です。
+
+- `ControlMaster auto`：最初にマスター接続を作り、以後は共有します。
+- `ControlPath`：共有接続を管理するソケットのパス。
+- `ControlPersist 10m`：最後の使用後も10分間バックグラウンドで保持し、再接続を高速化します。
+
+```
+...
+Host myhost
+	HostName x.x.x.x
+	Port 22
+	User myuser
+	IdentityFile ~/.ssh/id_ed25519
+	LocalForward /tmp/docker.sock /var/run/docker.sock
+	StreamLocalBindUnlink yes
+	ExitOnForwardFailure yes
+```
+
+- `LocalForward [local] [remote]`：ローカルの[local]への要求を、リモートの[remote]へ渡します。
+  - 例ではUnixドメインソケットですが、TCPポートも使えます。
+- `StreamLocalBindUnlink yes`：ローカルにソケットファイルがあれば上書きします。
+- `ExitOnForwardFailure yes`：転送に失敗したらエラーを出してSSHを終了します。
+
+> 接続するユーザーは`docker`グループのメンバーかrootである必要があります。
+
+```
+$ ssh -fN myhost
+```
+
+設定後は上記のコマンドでトンネルを作ります。`-f`でバックグラウンド実行します。
+
+```
+$  ssh -O check myhost # ControlMasterの動作を確認
+$  ssh -O exit myhost # ControlMasterを即時終了
+```
+
+その後、SSHの`-O`で多重化マスター（ControlMaster）へ指示できます。
+
+### lazydockerで接続する
+
+lazydockerはまず`DOCKER_HOST`から`docker.sock`を探します。転送したローカルソケットのパスを指定します。
+
+```sh
+export DOCKER_HOST=unix:///tmp/docker.sock
+```
+
+Unixドメインソケットを示すため、`unix://`を先頭に付けます。
+
+これで設定は完了し、リモートのDockerを`lazydocker`から操作できます！
+
+## Tori：監視ツール
+
+最近、Webを見ていて[Tori](https://github.com/thobiasn/tori-cli)を見つけました。
+
+![Tori Demo](https://assets.akuk.in/blog/in-content/tori-cli.gif 'Tori Demo')
+
+ToriはGo製の軽量なDockerサーバー監視TUIで、次の機能があります。
+
+- **ホストのメトリクス**：CPU、メモリ、ディスクなどの使用量を追跡。
+- **Dockerコンテナー監視**：状態、ヘルス、ログなどを追跡。
+- **通知**：SMTPやWebhookによる通知。
+- [その他の機能](https://github.com/thobiasn/tori-cli?tab=readme-ov-file#features)。
+
+> 2026年2月時点では開発・テスト段階で、既存の監視ツールを完全には置き換えられません！
+
+Toriは次の要素からなります。
+
+- **tori agent**：サーバーで継続的にメトリクス収集と監視を行います。
+  - Unixドメインソケットで通信します。
+  - SQLiteにメトリクスとログを保存します。
+- **tori client**：`tori.sock`へアクセスするクライアント。
+  - BubbleteaベースのTUI。
+  - SSHトンネルで接続し、SSH風の設定に対応します。
+
+### tori agent
+
+Docker Composeでtori agentを導入します。
+
+#### docker-compose.yml
+
+```yml
+services:
+  tori-agent:
+    container_name: tori-agent
+    image: ghcr.io/thobiasn/tori-cli:latest
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /run/tori:/run/tori
+      - ./config.toml:/etc/tori/config.toml
+      - ./data:/var/lib/tori
+```
+
+ボリュームで次を設定します。
+
+- ホストのメトリクスを収集するための`/proc`と`/sys`へのアクセス。
+- 監視用の`docker.sock`へのアクセス。
+- `tori.sock`を管理する`/run/tori`のマウント。
+- 設定ファイル`config.toml`とSQLiteデータのマウント。
+
+#### config.toml
+
+```
+[storage]
+path = "/var/lib/tori/tori.db"
+retention_days = 7
+
+[socket]
+path = "/run/tori/tori.sock"
+
+[host]
+proc = "/host/proc"
+sys = "/host/sys"
+
+[docker]
+socket = "/var/run/docker.sock"
+
+[collect]
+interval = "10s"
+```
+
+- **[storage]**：メトリクス・ログ収集用SQLite設定。
+- **[socket]**：Unixドメインソケットの位置。
+- **[host]**：ホストメトリクスの収集設定。
+- **[docker]**：DockerのUnixドメインソケットの位置。
+- **[collect]**：収集の設定。
+
+```
+[alerts.container_unhealthy]
+condition = "container.health == 'unhealthy'"
+for = "30s"
+severity = "critical"
+actions = ["notify"]
+
+[alerts.container_down]
+condition = "container.state == 'exited'"
+for = "0s"
+severity = "critical"
+actions = ["notify"]
+
+[alerts.container_restart_loop]
+condition = "container.restart_count > 5"
+severity = "critical"
+actions = ["notify"]
+
+[alerts.host_high_cpu]
+condition = "host.cpu_percent > 90"
+for = "1m"
+severity = "warning"
+actions = ["notify"]
+
+[alerts.host_high_memory]
+condition = "host.memory_percent > 90"
+for = "1m"
+severity = "warning"
+actions = ["notify"]
+
+[alerts.host_high_swap]
+condition = "host.swap_percent > 85"
+for = "30s"
+severity = "warning"
+actions = ["notify"]
+
+[alerts.host_disk_full]
+condition = "host.disk_percent > 90"
+for = "0s"
+severity = "critical"
+actions = ["notify"]
+```
+
+**[alert]**は特定の状況で警告を出すルールです。例は私の設定なので、ご自分の環境に合わせて調整してください。
+
+```
+[[notify.webhooks]]
+enabled = true
+url = "https://discord.com/api/webhooks/..."
+template = '{"content": "**{{.Subject}}**\n{{.Body}}"}'
+```
+
+**[notify]**で通知を設定します。私はDiscordをよく使うためWebhookを登録しました。SMTPによるメール通知も可能です。
+
+設定が終わったら、`docker compose up`でtori agentを起動します。
+
+### tori client
+
+tori clientは、今入れたエージェントへ接続するTUIです。次の方法でインストールできます。
+
+```sh
+$ curl -fsSL https://raw.githubusercontent.com/thobiasn/tori-cli/main/deploy/install.sh | sh -s -- --client
+```
+
+インストール後は`tori myuser@myhost`で接続するか、`~/.config/tori/config.toml`にサーバーを設定します。
+
+## おわりに
+
+イメージを調べる[dive](https://github.com/wagoodman/dive)や、リモートへイメージを送る[unregistry](https://github.com/psviderski/unregistry)などもありますが、今回はアクセス、管理、監視を中心に扱いました。
+
+`docker.sock`の転送は、リモートのDockerを制御する権限を与えます。Dockerでは権限昇格が容易で、例えばファイルシステム全体をマウントしてアクセスできます。**実質的にはroot権限を与えることと同じです。**
+
+同様の環境を作る場合は、信頼できる環境だけで設定することを勧めます。

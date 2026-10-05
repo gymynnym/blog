@@ -1,0 +1,70 @@
+---
+title: 'Sending and Receiving Packets'
+description: 'A walkthrough of how the wg0 WireGuard interface sends and receives packets using a cryptokey routing table, session keys, authentication, and AllowedIPs validation.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-13T15:27:02.917241'
+updatedAt: '2025-12-18T18:36:05.596350'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 3
+author: 'gymynnym'
+draft: false
+---
+
+# Sending and Receiving Packets
+
+We will use the following cryptokey routing table in this explanation.
+
+| Interface Public Key | Interface Private Key | Listen |
+| -------------------- | --------------------- | ------ |
+| `HIgo...8ykw`        | `yAnz...fBmk`         | 41414  |
+
+| Peer Public Key | AllowedIPs                       |
+| --------------- | -------------------------------- |
+| `xTIB...p8Dg`   | 10.192.122.3/32, 10.192.124.0/24 |
+| `TrMv...WXX0`   | 10.192.122.4/32, 192.168.0.0/16  |
+| `gN65...z6EA`   | 10.10.10.230/32                  |
+
+Here is how packets are sent and received through the `wg0` WireGuard virtual interface using this table.
+
+## Sending a Packet Through wg0
+
+When an IP packet is routed through `wg0` as its outgoing interface:
+
+1. The plaintext packet **arrives** at the WireGuard interface `wg0`.
+2. **Select a peer** using the destination IP address (look up the AllowedIPs table).
+   - For example, look up destination IP 192.168.87.21 and select peer `TrMv...WXX0`.
+   - If no peer matches, drop the packet. This may result in ICMP “no route to host” from the kernel or an `-ENOKEY` error in user space.
+3. **Encrypt** with the selected peer’s session key.
+   - For example, **encrypt** the plaintext packet with **ChaCha20-Poly1305**, using peer `TrMv...WXX0`’s symmetric sending encryption key and nonce counter.
+   - **Symmetric sending encryption key**: the sending-direction key among the symmetric session keys derived by the handshake.
+   - **Nonce counter**: a message number incremented for each data packet. It serves as the **nonce to prevent (key, nonce) reuse** and helps reject replayed packets.
+4. Prepend the WireGuard **message header** to the encrypted packet.
+5. Encapsulate it in UDP and **send** it to the peer.
+   - Header + ciphertext.
+   - The destination is the peer’s endpoint (external IP:port).
+   - The endpoint is configured explicitly or updated from the **outer source IP:port of a recently authenticated incoming packet**.
+   - If the endpoint is unknown, drop the packet.
+
+## Receiving a Packet on wg0
+
+When a packet arrives from outside on UDP port 41414 (the listening port):
+
+1. **Receive** the WireGuard packet on the configured UDP port, such as 41414.
+2. Locate the session/peer using the header, then **validate the counter and attempt authentication/decryption**.
+   - Use header information to identify the peer and session.
+   - Validate the message counter to prevent replay attacks.
+   - Attempt **authentication (Poly1305) and decryption** with the session’s receiving key.
+   - Drop the packet if the peer cannot be found or authentication fails.
+3. On successful authentication, **update the endpoint** using the outer source IP:port.
+4. Check that the decrypted inner plaintext packet is an IP packet and **validate its source** against AllowedIPs.
+   - If the decrypted result is not an IP packet, drop it.
+   - Otherwise, look up its source IP in AllowedIPs to find the peer to which that IP should be routed. Accept the packet if this peer matches the sender; otherwise, drop it.
+5. Add the validated packet to `wg0`’s receive queue.
+
+## Why Use AllowedIPs for Both Outgoing Routing and Incoming Validation?
+
+- **Sending**: destination IP -> choose the peer to send to.
+- **Receiving**: source IP -> verify which peer that IP should come from.
+
+This enforces a one-to-one mapping between IP addresses and peers. A reply to an incoming packet’s source IP is therefore always sent through the same peer. The whitepaper describes this as an effect similar to reverse-path filtering.

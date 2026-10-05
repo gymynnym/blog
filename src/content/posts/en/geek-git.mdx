@@ -1,0 +1,175 @@
+---
+title: 'Configuring Git Like a Geek'
+description: 'Customize Git to suit your workflow with .gitconfig settings, useful aliases, and SSH commit signing. Here is how I configure the tool I use every day.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/Geek%EC%8A%A4%EB%9F%BD%EA%B2%8C%20Git%20%EC%84%A4%EC%A0%95%ED%95%98%EA%B8%B0.png
+publishedAt: '2025-11-09T18:32:03.694025'
+updatedAt: '2025-11-21T20:48:34.088929+00:00'
+topics: ['git', 'github']
+author: 'gymynnym'
+draft: false
+---
+
+# Configuring Git Like a Geek
+
+### Introduction
+
+How often do you use [Git](https://git-scm.com)? It feels essential for developers today. Surely nobody is still using SVN or shared drives and shouting “I’m editing that file!” Customizing a frequently used tool improves efficiency and gives you a satisfying sense of being a little cooler. Here is how I configure and use Git.
+
+### `.gitconfig`: Git’s Configuration File
+
+The global Git configuration file is usually located at `~/.gitconfig`.  
+If this file already exists, you may have configured something previously. For example, after a commit error and some searching, you might have run `git config --global email <your_email>` (I did). This command adds an email entry to the global Git configuration.
+
+### `[user]`: User Information
+
+```
+[user]
+    name = <your_name>
+    email = <your_email>
+```
+
+`[user]` specifies the **user information** used for commits (`git commit`).
+
+### `[core]`: Core Settings
+
+```
+[core]
+    editor = nvim  # Change to your preferred editor
+    fsmonitor = true  # Enable for better performance
+```
+
+`[core]` controls Git’s **basic behavior**.  
+`editor` selects the editor used for commits, rebases, and similar tasks. I often use Git from the terminal, so I chose Neovim.  
+`fsmonitor` determines whether Git uses a **File System Monitor** to detect changes. Enabling it may speed up commands such as git status and git diff!
+
+### `[init]`: Initialization Settings
+
+```
+[init]
+    defaultBranch = master
+```
+
+`[init]` specifies defaults for initializing a repository with `git init`.  
+`defaultBranch` sets the initial branch name. I use the traditional **master**. Somehow, using **main** makes me feel I should rename **develop** to **dev**, too.
+
+### `[push]`, `[fetch]`, `[pull]`: Push, Fetch, and Pull Settings
+
+```
+[push]
+  default = simple
+  autoSetupRemote = true
+  followTags = true
+```
+
+`[push]` controls the default behavior of `git push`.
+
+- `default` selects which branch to push. With `simple`, it pushes to a remote branch with the same name as the current branch.
+- `autoSetupRemote = true` automatically applies `--set-upstream` when pushing a new local branch. Very convenient!
+- `followTags = true` also pushes tags referenced by the branch.
+
+```
+[fetch]
+  all = true
+  prune = true
+  pruneTags = true
+```
+
+`[fetch]` controls the default behavior of `git fetch`.
+
+- `all = true` fetches changes from all remotes.
+- `prune = true` removes local references to branches deleted from the remote.
+- `pruneTags = true` also removes local references to branches deleted from the remote.
+
+```
+[pull]
+  rebase = true
+```
+
+`[pull]` controls the default behavior of `git pull`.
+
+- `rebase = true` uses rebase instead of merge when pulling. I prefer it for a clean commit history.
+
+### `[branch]`, `[tag]`: Branch and Tag Settings
+
+```
+[branch]
+  sort = -committerdate
+
+[tag]
+  sort = version:refname
+```
+
+`[branch]`’s `sort` option controls how `git branch -l` sorts the branch list.  
+`[tag]`’s `sort` option controls how `git tag -l` sorts the tag list.
+
+### `[alias]`: Command Aliases
+
+```
+[alias]
+  st = add
+  stage = add
+  unst = restore --staged
+  unstage = restore --staged
+  cm = commit
+  cmend = commit --amend
+  cmcnt = shortlog -sn # commit count
+  mg = merge
+  rb = rebase
+  br = branch
+  sw = switch
+  fuck = reset --hard HEAD
+
+  # log, log with graph
+  lg = log --oneline --graph --date=relative --pretty=format:'%C(bold cyan)%h%C(reset)%C(yellow)%d%C(reset) %s %C(cyan)(%cr)%C(bold italic blue) [%an]'
+  lgg = log --all --oneline --graph --date=relative --pretty=format:'%C(bold cyan)%h%C(reset)%C(yellow)%d%C(reset) %s %C(cyan)(%cr)%C(bold italic blue) [%an]'
+  changelog = log --oneline --pretty=format:'%C(bold cyan)%h%C(reset) %s'
+```
+
+I consider `[alias]` the highlight of `.gitconfig`. Your own commands and abbreviations can make Git feel much cooler. Here are mine.
+
+- `git st` = `git stage` = `git add`. I use this abbreviation because add stages changes. The downside is that I have to type stash in full.
+- `git unst` = `git unstage` = `git restore --staged`
+- `git cm` = `git commit`
+- `git cmend` = `git commit --amend` (edit the last commit).
+- `git cmcnt` = `git shortlog -sn` (count commits).
+- `git mg` = `git merge`
+- `git rb` = `git rebase`
+- `git br` = `git branch`
+- `git sw` = `git switch`
+- `git fuck` = `git reset --hard HEAD` (I did not expect to use this so often).
+- `git lg` = view commit history as a graph.
+- `git lgg` = view commit history for all branches as a graph.
+- `git changelog` = view a compact commit log (useful when writing PRs).
+
+### Extra: Signing Commits with SSH Keys
+
+```
+[user]
+  ...
+  signingkey = <your_signingkey_path>
+
+[commit]
+  gpgsign = true
+
+[gpg]
+  format = ssh
+```
+
+Commit signing is optional, but try it if you want to prove “I wrote this commit!” GitHub also rewards you with a proud Verified badge.
+
+You can sign with GPG keys, but SSH signing is simpler and more modern, so I will explain that approach.
+
+You can reuse an existing SSH key. If you do not have one, generate it with `ssh-keygen`. Ed25519 is cool.
+
+Set `user.signingkey` to the path of the SSH public key used for signing.  
+Set `commit.gpgsign` to true to sign every commit automatically.  
+Set `gpg.format` to ssh, since we are using SSH rather than GPG signing.
+
+### Closing Thoughts
+
+Thanks for reading. My `.gitconfig` will keep evolving, and I look forward to that. If you have useful tips or cool aliases, please share them. _I will happily steal them._
+
+**References**
+
+- https://news.ycombinator.com/item?id=39400352
+- https://www.youtube.com/watch?v=aolI_Rz0ZqY

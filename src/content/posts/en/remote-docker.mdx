@@ -1,0 +1,269 @@
+---
+title: 'Accessing and Managing Docker on a Remote Server'
+description: 'Access remote Docker from macOS with SSH Unix socket forwarding and lazydocker, then monitor the server with Tori’s agent and TUI client.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/%EC%9B%90%EA%B2%A9%20%EC%84%9C%EB%B2%84%EC%9D%98%20Docker%EC%97%90%20%EB%8C%80%ED%95%9C%20%EC%A0%91%EA%B7%BC%EA%B3%BC%20%EA%B4%80%EB%A6%AC.png
+publishedAt: '2026-02-18T14:18:58.520543'
+updatedAt: '2026-02-18T15:59:59.990044+00:00'
+topics: ['ssh', 'docker']
+author: 'gymynnym'
+draft: false
+---
+
+# Accessing and Managing Docker on a Remote Server
+
+## Introduction
+
+Because [macOS cannot run Docker natively](/en/posts/lean-development-environment#adopting-docker-macos-cannot-run-docker-natively), I run Docker remotely on an Ubuntu home server. I suspect many macOS users have a similar setup. This article introduces the tools and methods I use, along with basic usage.
+
+## lazydocker: Management Tool
+
+I regularly use [lazydocker](https://github.com/jesseduffield/lazydocker), a TUI for managing Docker and Docker Compose. It is useful in environments where heavier WebUI tools such as [Dockge](https://github.com/louislam/dockge) or [Portainer](https://github.com/portainer/portainer) are unsuitable.
+
+![Lazydocker Demo](https://github.com/jesseduffield/lazydocker/raw/master/docs/resources/demo3.gif 'Lazydocker Demo')
+
+However, using lazydocker in my setup required **accessing Docker from the local system**, for the following reason.
+
+> I tried an SSH-based address, but passwordless SSH-key access was unsupported. A [feature PR](https://github.com/jesseduffield/lazydocker/pull/577) addresses the [related issue](https://github.com/jesseduffield/lazydocker/issues/559), and a [fork that resolves it](https://github.com/peauc/lazydocker-ng) seems to exist, but the PR has not been merged for some reason. :(
+
+Let’s try an approach that is a little fiddly, but interesting.
+
+### Unix Domain Socket
+
+First, let’s examine Unix domain sockets, which Docker uses for communication.
+
+Ordinary **TCP/IP** socket communication uses the network and an `ip:port` address. For communication entirely within a local system, the network stack is unnecessary. Unix systems provide **Unix domain sockets** for this purpose.
+
+A **Unix domain socket** bypasses the network stack and uses the path of a `.sock` file instead of `ip:port`.
+
+```sh
+$ ls -l docker.sock
+srw-rw---- 1 root docker 0 Jan  1 00:00 docker.sock
+```
+
+Its file type is `s` (socket), and filesystem permissions control access. Next, we will make this `docker.sock` accessible from another system.
+
+### SSH Local Forwarding
+
+SSH **local forwarding** forwards streams through an **SSH tunnel**, including TCP ports and Unix domain sockets. It can make a service or socket on a remote server appear to run locally.
+
+```sh
+$ ssh -N -L /tmp/docker.sock:/var/run/docker.sock myuser@myhost
+```
+
+SSH’s `-L` enables local forwarding, while `-N` keeps only the tunnel open without running a remote command or shell. This forwards the remote `/var/run/docker.sock` to local `/tmp/docker.sock`.
+
+Typing this each time is cumbersome, so let’s declare it in `~/.ssh/config`.
+
+```
+Host *
+	ControlMaster auto
+	ControlPath ~/.ssh/cm-%r@%h:%p
+	ControlPersist 10m
+...
+```
+
+This configuration enables SSH multiplexing.
+
+> SSH multiplexing lets **multiple SSH sessions share one TCP connection**.
+
+- `ControlMaster auto`: create a master connection on first access and reuse it later.
+- `ControlPath`: path of the socket managing the shared connection.
+- `ControlPersist 10m`: keep the connection in the background for 10 minutes after its last use, speeding up reconnection.
+
+```
+...
+Host myhost
+	HostName x.x.x.x
+	Port 22
+	User myuser
+	IdentityFile ~/.ssh/id_ed25519
+	LocalForward /tmp/docker.sock /var/run/docker.sock
+	StreamLocalBindUnlink yes
+	ExitOnForwardFailure yes
+```
+
+- `LocalForward [local] [remote]`: forward requests arriving at [local] to [remote] on the server.
+  - This example uses Unix domain sockets, but TCP ports work too.
+- `StreamLocalBindUnlink yes`: replace an existing local socket file.
+- `ExitOnForwardFailure yes`: terminate SSH with an error if forwarding fails.
+
+> The connecting user must belong to the `docker` group or be root.
+
+```
+$ ssh -fN myhost
+```
+
+After configuring it, create the tunnel with the command above. `-f` runs it in the background.
+
+```
+$  ssh -O check myhost # Check whether ControlMaster is running
+$  ssh -O exit myhost # Terminate ControlMaster immediately
+```
+
+You can then use SSH’s `-O` option to send commands to the multiplexing master (ControlMaster).
+
+### Connecting with lazydocker
+
+lazydocker first checks `DOCKER_HOST` to locate `docker.sock`. Set it to the path of the locally forwarded socket.
+
+```sh
+export DOCKER_HOST=unix:///tmp/docker.sock
+```
+
+Use the `unix://` scheme prefix to indicate a Unix domain socket.
+
+Everything is now configured, and `lazydocker` can access Docker on the remote system!
+
+## Tori: Monitoring Tool
+
+I recently came across [Tori](https://github.com/thobiasn/tori-cli) while browsing the web.
+
+![Tori Demo](https://assets.akuk.in/blog/in-content/tori-cli.gif 'Tori Demo')
+
+Tori is a lightweight Docker server monitoring TUI written in Go. It provides:
+
+- **Host metrics**: track CPU, memory, disk usage, and more.
+- **Docker container monitoring**: track status, health, logs, and more.
+- **Notifications**: SMTP and webhook notifications.
+- [Other features](https://github.com/thobiasn/tori-cli?tab=readme-ov-file#features).
+
+> As of February 2026, it is still in development and testing and cannot fully replace existing monitoring tools!
+
+Tori consists of:
+
+- **tori agent**: continuously collects metrics and monitors the server.
+  - Communicates over a Unix domain socket.
+  - Stores metrics and logs in SQLite.
+- **tori client**: client for accessing `tori.sock`.
+  - Bubbletea-based TUI.
+  - Connects through SSH tunnels and supports SSH-like configuration.
+
+### tori agent
+
+Let’s install tori agent with Docker Compose.
+
+#### docker-compose.yml
+
+```yml
+services:
+  tori-agent:
+    container_name: tori-agent
+    image: ghcr.io/thobiasn/tori-cli:latest
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /run/tori:/run/tori
+      - ./config.toml:/etc/tori/config.toml
+      - ./data:/var/lib/tori
+```
+
+The volume configuration provides:
+
+- Access to `/proc` and `/sys` for host metrics.
+- Access to `docker.sock` for monitoring.
+- A `/run/tori` mount for managing `tori.sock`.
+- Mounts for `config.toml` and SQLite data.
+
+#### config.toml
+
+```
+[storage]
+path = "/var/lib/tori/tori.db"
+retention_days = 7
+
+[socket]
+path = "/run/tori/tori.sock"
+
+[host]
+proc = "/host/proc"
+sys = "/host/sys"
+
+[docker]
+socket = "/var/run/docker.sock"
+
+[collect]
+interval = "10s"
+```
+
+- **[storage]**: SQLite settings for metrics and logs.
+- **[socket]**: Unix domain socket location.
+- **[host]**: host metrics collection settings.
+- **[docker]**: Docker Unix domain socket location.
+- **[collect]**: collection settings.
+
+```
+[alerts.container_unhealthy]
+condition = "container.health == 'unhealthy'"
+for = "30s"
+severity = "critical"
+actions = ["notify"]
+
+[alerts.container_down]
+condition = "container.state == 'exited'"
+for = "0s"
+severity = "critical"
+actions = ["notify"]
+
+[alerts.container_restart_loop]
+condition = "container.restart_count > 5"
+severity = "critical"
+actions = ["notify"]
+
+[alerts.host_high_cpu]
+condition = "host.cpu_percent > 90"
+for = "1m"
+severity = "warning"
+actions = ["notify"]
+
+[alerts.host_high_memory]
+condition = "host.memory_percent > 90"
+for = "1m"
+severity = "warning"
+actions = ["notify"]
+
+[alerts.host_high_swap]
+condition = "host.swap_percent > 85"
+for = "30s"
+severity = "warning"
+actions = ["notify"]
+
+[alerts.host_disk_full]
+condition = "host.disk_percent > 90"
+for = "0s"
+severity = "critical"
+actions = ["notify"]
+```
+
+**[alert]** defines rules that generate warnings in specified situations. The example shows my own rules; adjust them for your environment.
+
+```
+[[notify.webhooks]]
+enabled = true
+url = "https://discord.com/api/webhooks/..."
+template = '{"content": "**{{.Subject}}**\n{{.Body}}"}'
+```
+
+**[notify]** configures notifications. I often use Discord, so I registered a Discord webhook. Email notifications via SMTP are also available.
+
+Once configured, start tori agent with `docker compose up`.
+
+### tori client
+
+tori client is the TUI that connects to the agent we just installed. Install it using one of these methods:
+
+```sh
+$ curl -fsSL https://raw.githubusercontent.com/thobiasn/tori-cli/main/deploy/install.sh | sh -s -- --client
+```
+
+After installation, use `tori myuser@myhost` or configure the server in `~/.config/tori/config.toml`.
+
+## Closing Thoughts
+
+Other tools include [dive](https://github.com/wagoodman/dive) for inspecting images and [unregistry](https://github.com/psviderski/unregistry) for transferring images to remote servers. This article focused on access, management, and monitoring.
+
+Forwarding `docker.sock` locally grants control over Docker on the remote server. Docker makes privilege escalation easy: for example, you can mount and access the entire filesystem. **This is effectively equivalent to granting root access.**
+
+If you build a similar setup, use it only in an environment you trust.

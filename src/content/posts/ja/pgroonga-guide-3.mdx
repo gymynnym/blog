@@ -1,0 +1,71 @@
+---
+title: 'PGroongaのさまざまな演算子'
+description: 'PGroongaのキーワード検索、クエリ構文による検索、類似検索の演算子を紹介します。&@や&@~など、それぞれの使いどころを説明します。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/PGroonga%20%EA%B0%80%EC%9D%B4%EB%93%9C.png
+publishedAt: '2025-12-02T00:44:45.999758'
+updatedAt: '2025-12-02T10:31:43.181738'
+topics: ['postgresql', 'docker']
+series: 'pgroonga-guide'
+seriesOrder: 3
+author: 'gymynnym'
+draft: false
+---
+
+# PGroongaのさまざまな演算子
+
+### `&@` : Full Text Search by keyword
+
+```sql
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@ '첫 번째';
+```
+
+入力した文字列が列の値に含まれるかを検査します。  
+PostgreSQLの`LIKE '%keyword%'`に似ていますが、Groongaインデックスを使うため通常ははるかに高速です。
+
+### `&@~` : Full text search
+
+```sql
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@~ '첫 번째 OR 두 번째';
+```
+
+`&@`に似ていますが、[Groongaのクエリ構文](https://groonga.org/docs/reference/grn_expr/query_syntax.html)をサポートし、`AND`、`OR`、`-`も使えます。
+
+例：
+
+- `apple AND banana`：appleとbananaの両方を含む。
+- `apple OR banana`：appleまたはbananaを含む。
+- `apple -banana`：appleを含み、bananaを除外する。
+
+> 検索エンジンの実装に適した演算子です。
+
+### `&@*` : Similar search
+
+```sql
+CREATE TABLE memos (
+  id integer,
+  content text
+);
+
+CREATE INDEX pgroonga_content_index
+ON memos USING pgroonga (content);
+```
+
+```sql
+INSERT INTO memos VALUES (1, 'PostgreSQL is a relational database management system.');
+INSERT INTO memos VALUES (2, 'Groonga is a fast full text search engine that supports all languages.');
+INSERT INTO memos VALUES (3, 'PGroonga is a PostgreSQL extension that uses Groonga as index.');
+INSERT INTO memos VALUES (4, 'There is groonga command.');
+```
+
+```sql
+SELECT * FROM memos WHERE content &@* 'Mroonga is a MySQL extension taht uses Groonga';
+--   id |                            content
+-- -----+----------------------------------------------------------------
+--    3 | PGroonga is a PostgreSQL extension that uses Groonga as index.
+```
+
+キーワードと似た単語を含むか検索します。上記の例では、`Mroonga`と`PGroonga`が似ているため、検索結果に含まれます。
+
+> 類似語の検索や、似たコンテンツを推薦する機能に適しています。

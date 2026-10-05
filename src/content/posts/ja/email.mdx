@@ -1,0 +1,258 @@
+---
+title: 'メール：デジタルな礼儀を身につける'
+description: 'SMTP、POP3、IMAPからSPF、DKIM、DMARC、エンドツーエンド暗号化まで、現代のメールの仕組みと使われ続ける理由を考えます。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/%EC%9D%B4%EB%A9%94%EC%9D%BC_%20%EB%94%94%EC%A7%80%ED%84%B8%20%EC%98%88%EC%9D%98%EB%A5%BC%20%EA%B0%96%EC%B6%94%EB%8A%94%20%EB%B2%95.png
+publishedAt: '2026-01-23T00:51:55.332409'
+updatedAt: '2026-01-23T00:55:36.918997+00:00'
+topics: ['uncategorized']
+author: 'gymynnym'
+draft: false
+---
+
+# メール：デジタルな礼儀を身につける
+
+## メールの概要
+
+**メール（電子郵便）**は電子機器でメッセージを送受信する方法です。最初は1971年にARPANETで送信され、そのとき登場した`username@hostname`は今も使われています。1971年の技術が今も安全なのか気になり、現代の仕組みを調べました。
+
+## メールのプロトコル
+
+プロトコルは**送信と受信**に分かれます。現在は通常、送信に**SMTP**、受信に**IMAP**を使います。
+
+### SMTP/ESMTP：送信プロトコル
+
+**SMTP（Simple Mail Transfer Protocol）**はネットワークでメールを送るプロトコルで、次の要素があります。
+
+1. **MUA(Mail User Agent)**
+   - 利用者のメールクライアント。
+   - Gmailアプリ、Thunderbirdなど。
+2. **MSA(Mail Submission Agent)**
+   - MUAから最初にメールを受け取るサーバー。
+3. **MTA(Mail Transfer Agent)**
+   - DNSのMXレコードで受信者のMTAを探し、中継します。
+   - Postfix、Sendmailなど。
+4. **MDA(Mail Delivery Agent)**
+   - MTAからのメールを利用者のメールボックスへ保存します。
+   - 利用者はPOP3やIMAPでアクセスします。
+
+SMTPは対話型です。Cをクライアント、Sをサーバーとして説明します。
+
+#### 1. TCP接続とサーバー応答
+
+```
+S -> C : 220 mail.example.org ESMTP
+```
+
+- 開始時にはサーバーが先に応答します。
+- 220はSMTPサービスの準備完了です。
+
+#### 2. クライアントの挨拶（HELO/EHLO）
+
+```
+C -> S : EHLO client.example.org
+// サーバーは250応答で対応する拡張機能を返す
+S -> C : 250-mail.example.org
+S -> C : 250-STARTTLS
+S -> C : 250-AUTH PLAIN LOGIN
+S -> C : 250 SIZE 52428800
+```
+
+- `HELO`：基本のSMTPを開始。
+- `EHLO`：**ESMTP（拡張SMTP）**を開始。
+
+#### 3-1. TLS接続（STARTTLS）
+
+```
+C -> S : STARTTLS
+S -> C : 220 Ready to start TLS
+```
+
+ハンドシェイクを行い、TLS開始後にEHLOを再送します。
+
+#### 3-2. 認証（AUTH）
+
+```
+C -> S : AUTH LOGIN
+// ユーザー名とパスワードによる認証
+S -> C : 235 Authentication successful
+```
+
+TLSなしでは`AUTH LOGIN`を中間者に見られるため、`STARTTLS`が必要です。
+
+> `AUTH LOGIN`は対話式です。`AUTH PLAIN`はNUL＋username＋NUL＋passwordをBase64にして、一度に送ります。
+
+#### 4. 送信者と受信者の指定
+
+```
+C -> S : MAIL FROM:<sender@example.org>
+S -> C : 250 OK
+C -> S : RCPT TO:<receiver@example.org>
+S -> C : 250 OK
+```
+
+#### 5. 本文の送信
+
+```
+C -> S : DATA
+S -> C : 354 End data with <CR><LF>.<CR><LF>
+
+From: sender@example.org
+To: receiver@example.org
+Subject: メールの件名です。
+
+メールの本文です。
+.
+
+S -> C : 250 Message accepted for delivery
+```
+
+#### 6. サーバー内部の処理
+
+セッションの後、サーバーは通常、次を行います。
+
+- 受信者アドレスのDNS MXレコードを参照します。
+  - ローカル利用者ならMDAへ渡して保存します。
+  - それ以外はリモートMTAへSMTPで中継します。
+
+> **SMTP**はHTTPと同じく規約であり実装ではありません。HTTPにNginxやCaddyがあるように、SMTPにはPostfixがあります。**内部処理は実装の責任**で、SMTP規約には定義されません。
+
+#### 7. 接続の終了
+
+```
+C -> S : QUIT
+S -> C : 221 Bye
+```
+
+TCP接続を終了します。
+
+### POP3/IMAP：受信プロトコル
+
+主な受信プロトコルは**POP3（Post Office Protocol v3）**と**IMAP（Internet Message Access Protocol）**です。どちらもMDAのメールをMUAで読むものですが、次の違いがあります。
+
+| 項目             | **POP3**                         | **IMAP**                               |
+| ---------------- | -------------------------------- | -------------------------------------- |
+| 保存先           | 利用者の端末                     | サーバー                               |
+| 複数端末         | 同期不可                         | 同期可能                               |
+| 速度             | 初期読み込みが遅い：本文まで取得 | 初期読み込みが速い：ヘッダーを先に取得 |
+| バックアップ責任 | 利用者                           | サーバー管理者                         |
+
+**POP3**は郵便局から手紙を持ち帰るような方式で、利用者の責任が大きくなります。**IMAP**はサーバーをファイルサーバーとして同期し、メールをサーバーに残します。
+
+#### POP3
+
+```
+// 認証
+C -> S : USER username
+S -> C : +OK
+C -> C : PASS p@ssw0rd
+S -> C : +OK Logged in.
+```
+
+```
+C -> S : LIST // メール一覧を取得
+C -> S : RETR 1 // 1番のメールを取得
+C -> S : DELE 1 // 1番のメールに削除の印を付ける
+C -> S : QUIT // 切断し、印を付けたメールの削除を要求
+S -> C : +OK Bye
+```
+
+ネットワークでは**転送途中の切断**が起こります。取得中の紛失を防ぐため、POP3は**削除の印**を使います。`DELE`で印を付け、`QUIT`で実際の削除を要求します。
+
+> 利用者は自分でデータを管理したくなく、企業ならなおさらです。そのため現在はIMAPが標準です。:(
+
+## メールのセキュリティ
+
+### SPF
+
+**SPF（Sender Policy Framework）**は送信サーバーのIPを指定し、送信者偽装を防ぐ技術です。[DNS TXTレコード](https://www.cloudflare.com/learning/dns/dns-records/dns-txt-record/)で設定します。
+
+SPFのTXTレコードは次の形式です。
+
+```
+example.org.  IN  TXT  "v=spf1 ip4:192.0.2.0/24 include:_spf.google.com ~all"
+```
+
+- `v=spf1`：SPFバージョン。
+- `ip4/ip6`：IPや範囲を許可。
+- `include`：外部サービスなどの別ドメインのSPFを参照。
+- `all`の**方針**：
+  - `-all`：拒否。
+  - `~all`：許可するがスパムに分類。
+  - `?all`：方針なし。
+
+転送では中継先のIPがSPFにないため、認証に失敗することがあります。通常は**DKIM**と組み合わせて補います。
+
+### DKIM
+
+**DKIM（DomainKeys Identified Mail）**はヘッダーの**公開鍵による電子署名**で改ざんがないことを証明します。[DNS TXTレコード](https://www.cloudflare.com/learning/dns/dns-records/dns-txt-record/)で設定します。
+
+サーバーが生成する**鍵ペア**を使い、秘密鍵で作った署名を受信者が公開鍵で検証します。公開鍵は次のようにTXTレコードで公開します。
+
+```
+selector._domainkey.example.org.  IN  TXT  "v=dkim1; k=rsa; p=..."
+```
+
+- `selector`：DKIMセレクター。
+  - 一つのドメインに複数の鍵を設定できます。
+  - ヘッダーのセレクターで鍵を検索します。
+- `v=dkim1`：バージョン1を使用。
+- `k=rsa`：RSAを使用。
+- `p=...`：公開鍵。
+
+検証の手順は次のとおりです。
+
+1. `DKIM-Signature`を確認します。
+   - 署名（`b`）、セレクター（`s`）、ドメイン（`d`）などを含みます。
+2. `s`と`d`でDNS TXTを検索し、公開鍵とアルゴリズムを得ます。
+3. ヘッダーの規則に従い、公開鍵で署名と本文ハッシュを検証します。
+   - 成功：`pass`。
+   - 失敗：`fail`。
+   - ヘッダーなし：`none`。
+
+### DMARC
+
+**DMARC（Domain-based Message Authentication, Reporting, and Conformance）**はSPFとDKIMの結果から受信サーバーへ処理方針を伝えます。[DNS TXTレコード](https://www.cloudflare.com/learning/dns/dns-records/dns-txt-record/)で設定します。
+
+DMARCのTXTレコードは次の形式です。
+
+```
+_dmarc.example.org.  IN  TXT  "v=DMARC1; p=quarantine; adkim=s; aspf=s;"
+```
+
+- `v=DMARC1`：バージョン。
+- `p`：方針。
+  - `none`：ブロックしない。
+  - `quarantine`：スパムへ隔離。
+  - `reject`：受信を拒否。
+- `adkim`：DKIM整合方法。
+  - `r`：relaxed。Fromの上位ドメインなら許可。
+  - `s`：strict。Fromと完全一致なら許可。
+- `aspf`：SPF整合方法。
+  - `r`：relaxed。Fromの上位ドメインなら許可。
+  - `s`：strict。Fromと完全一致なら許可。
+- `rua`、`ruf`：レポートの受信先。
+  - 処理方針のほか、集計・失敗レポートも収集できます。
+
+> **整合**は、Fromドメインと認証に使うドメインが同じか確認することです。
+
+### エンドツーエンド暗号化（E2EE）
+
+> 次はプライバシー、盗聴、安全性を扱います。
+
+[Proton Mail](https://proton.me/mail)などは**エンドツーエンド暗号化**に対応し、内容を暗号化して、エンドユーザーだけが復号できます。技術的にはProtonも読めません。
+
+代表的な方法は[**PGP**](https://proton.me/support/how-to-use-pgp)で、**鍵ペア**を使います。受信者が公開鍵を公開し、送信者がそれで暗号化したメールを、秘密鍵で復号します。
+
+ただし、Proton Mail同士など対応サービス間の話です。Gmailなど非対応の宛先へ送ると成立しません。[パスワード保護メール](https://proton.me/support/password-protected-emails)で補えますが、**これはもはやメール技術そのものではありません**。
+
+## おわりに
+
+> なぜ今も1971年の技術を使うのでしょうか？
+
+VoLTEやSMSのほうが気になる面もありますが、今回はメールを調べました。使われ続ける理由は**管理権**だと思います。組織は独自の規則でアカウントとメッセージを管理したいもので、メールなら自然に、比較的簡単に構築できます。
+
+ビジネスでのメールは、「あなたの組織のサーバーへ、あなたの規則を守って丁寧に届けます」という行為に思えます。
+
+気軽なメッセージにはインスタントメッセンジャーを使います。
+
+SPF、DKIM、E2EEなども発展してきたので、まだ安心して使えそうです。

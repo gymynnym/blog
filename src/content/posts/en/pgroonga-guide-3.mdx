@@ -1,0 +1,71 @@
+---
+title: 'PGroonga Operators'
+description: 'Explore PGroonga’s keyword, query-syntax, and similarity search operators, including &@ and &@~, and learn when each operator is useful.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/PGroonga%20%EA%B0%80%EC%9D%B4%EB%93%9C.png
+publishedAt: '2025-12-02T00:44:45.999758'
+updatedAt: '2025-12-02T10:31:43.181738'
+topics: ['postgresql', 'docker']
+series: 'pgroonga-guide'
+seriesOrder: 3
+author: 'gymynnym'
+draft: false
+---
+
+# PGroonga Operators
+
+### `&@` : Full Text Search by keyword
+
+```sql
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@ '첫 번째';
+```
+
+This simply checks whether the column value contains the input string.  
+It resembles PostgreSQL’s `LIKE '%keyword%'`, but is generally much faster because it uses a Groonga index.
+
+### `&@~` : Full text search
+
+```sql
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@~ '첫 번째 OR 두 번째';
+```
+
+It is similar to `&@`, but supports [Groonga’s query syntax](https://groonga.org/docs/reference/grn_expr/query_syntax.html), including `AND`, `OR`, and `-`.
+
+Examples:
+
+- `apple AND banana`: contains both apple and banana.
+- `apple OR banana`: contains apple or banana.
+- `apple -banana`: contains apple and excludes banana.
+
+> This operator is well suited to implementing a search engine.
+
+### `&@*` : Similar search
+
+```sql
+CREATE TABLE memos (
+  id integer,
+  content text
+);
+
+CREATE INDEX pgroonga_content_index
+ON memos USING pgroonga (content);
+```
+
+```sql
+INSERT INTO memos VALUES (1, 'PostgreSQL is a relational database management system.');
+INSERT INTO memos VALUES (2, 'Groonga is a fast full text search engine that supports all languages.');
+INSERT INTO memos VALUES (3, 'PGroonga is a PostgreSQL extension that uses Groonga as index.');
+INSERT INTO memos VALUES (4, 'There is groonga command.');
+```
+
+```sql
+SELECT * FROM memos WHERE content &@* 'Mroonga is a MySQL extension taht uses Groonga';
+--   id |                            content
+-- -----+----------------------------------------------------------------
+--    3 | PGroonga is a PostgreSQL extension that uses Groonga as index.
+```
+
+This searches for words similar to the keyword. In the example above, `Mroonga` and `PGroonga` are similar words, so they appear in the results.
+
+> Use this operator for similar-word searches or recommendations of similar content.

@@ -1,0 +1,38 @@
+---
+title: 'Conclusion'
+description: 'WireGuard combines a codebase of fewer than 4,000 lines, high performance, broad platform support, simple cryptokey routing, and silent behavior toward unauthenticated packets.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-19T01:17:26.180434'
+updatedAt: '2025-12-19T13:53:25.997026'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 7
+author: 'gymynnym'
+draft: false
+---
+
+# Conclusion
+
+## A Codebase of Fewer Than 4,000 Lines
+
+WireGuard has fewer than 4,000 lines of code, far less than IPsec or OpenVPN. This makes finding vulnerabilities and maintaining the code easier.
+
+## Multiple Platforms
+
+Running in kernel space gives WireGuard high performance. Its small codebase supports use across a wide range of devices and security properties that can remain trustworthy far into the future.
+
+## Cryptokey Routing
+
+Instead of complex configuration, WireGuard allows connections using only a peer’s **public key and allowed IP addresses**. This simplifies administration and helps prevent security incidents.
+
+## Security Through Silence
+
+WireGuard does not normally respond to unauthenticated packets, making network scanning harder and improving security.
+
+## Bonus: Easy Installation
+
+> You can also install it with the unofficial convenience script [Nyr/wireguard-install](https://github.com/Nyr/wireguard-install).
+
+```
+$ wget https://git.io/wireguard -O wireguard-install.sh && bash wireguard-install.sh
+```

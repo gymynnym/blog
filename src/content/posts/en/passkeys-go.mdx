@@ -1,0 +1,535 @@
+---
+title: 'Logging In with Passkeys: Managing My Own Secrets with Go'
+description: 'Learn how passkeys and WebAuthn use public-key authentication, then implement registration and login with Go, Gin, and the browser WebAuthn API.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/Passkey%EB%A1%9C%20%EB%A1%9C%EA%B7%B8%EC%9D%B8_%20%EB%82%B4%20%EB%B9%84%EB%B0%80%EC%9D%80%20%EB%82%B4%EA%B0%80%20%EA%B4%80%EB%A6%AC%ED%95%98%EA%B8%B0.png
+publishedAt: '2026-01-09T00:04:19.075127'
+updatedAt: '2026-01-09T14:36:33.237996+00:00'
+topics: ['go']
+author: 'gymynnym'
+draft: false
+---
+
+# Logging In with Passkeys: Managing My Own Secrets with Go
+
+## Introduction
+
+![apple_passkey_login.jpg](https://assets.akuk.in/blog/in-content/1767882560183_apple_passkey_login.webp 'From https://developer.apple.com/passkeys')
+
+Whenever I see **Sign in with a passkey**, I tend to smile and click immediately: passkey authentication is safer and easier. Let’s explore what that button means.
+
+## WebAuthn (Web Authentication) Overview
+
+> [W3C](https://en.wikipedia.org/wiki/World_Wide_Web_Consortium) is an international standards organization for the World Wide Web.
+
+> [FIDO2](https://en.wikipedia.org/wiki/FIDO_Alliance#FIDO2) is a joint project of the FIDO Alliance and W3C for strong web authentication.
+
+**WebAuthn** is a W3C standard and a core part of FIDO2. Developers can think of it as similar to **public-key authentication** in `ssh`. It uses public/private key pairs instead of passwords, and users never send their secrets (passwords or private keys) to the server.
+
+WebAuthn has three components:
+
+1. **Website**: a compliant relying party.
+2. **Browser**: a compliant client.
+3. **Authenticator**: a FIDO2 authenticator compatible with the client.
+
+WebAuthn defines APIs for websites to authenticate users with credentials and specifies authenticator behavior.
+
+> Wondering why WebAuthn appears in an article about passkeys? The explanation is two sections below; feel free to skip ahead.
+
+### WebAuthn Authenticators
+
+A WebAuthn authenticator is a trusted **credential manager**. It securely stores private keys and signs server challenges. Types include:
+
+1. **Platform authenticators**: built into devices, usually requiring biometrics.
+   - Use hardware TPM.
+2. **Roaming authenticators**: portable and device-independent, also called cross-platform authenticators.
+   - YubiKey, smartphone authentication notifications (CaBLE), and others.
+3. **Software authenticators**: apps or extensions that sync to encrypted cloud storage.
+   - Cloud sync allows private-key recovery after hardware loss or damage.
+   - A leaked master password may expose all stored secrets.
+   - Bitwarden, Apple Passwords, and others.
+
+> A **TPM (Trusted Platform Module)** is a security chip designed to make stored information hard to steal through ordinary software attacks.
+
+### Passkey
+
+A passkey is a nontechnical name for a **WebAuthn credential managed by an authenticator**. Services such as Google and GitHub use this term in their authentication interfaces.
+
+> “Sign in with a WebAuthn credential” would sound too technical to most users.
+
+## WebAuthn Workflow
+
+The main phases are **registration** and **authentication**, much like signing up and logging in. The server never learns private keys or passwords. Keys are used as follows:
+
+- **Private key**: signing on the client.
+- **Public key**: verification on the server.
+
+### Registration
+
+1. **Registration request** (client -> server).
+   - The user clicks “Register a passkey.”
+2. **Generate challenge and options** (server -> client).
+   - Create an options object containing:
+     - `challenge`: random data for signing and verification.
+     - `rp`: relying-party details; `id` defines the valid domain scope.
+     - `user`: user information.
+     - `pubKeyCredParams`: recommended cryptographic algorithms.
+   - Send the options to the browser.
+3. **Call the authenticator** (client -> authenticator).
+   - Call `navigator.credentials.create()`.
+   - Pass the options to the authenticator.
+4. **Verify the user and generate keys** (authenticator).
+   - Require a PIN or biometrics such as a fingerprint or Face ID.
+   - Generate a new public/private key pair for this website.
+   - Store the private key securely and create a credential ID to locate it.
+5. **Sign and send** (authenticator -> client -> server).
+   - Sign the server challenge with the generated private key.
+   - Send the public key, signature, algorithm, and credential ID to the browser.
+   - The browser forwards them to the server.
+6. **Verify and store** (server).
+   - Verify the signature with the received public key.
+   - On success, save the following in the database:
+     - User ID: credential ID, public key, and algorithm.
+
+### Authentication
+
+1. **Login request** (client -> server).
+   - The user clicks “Sign in with a passkey.”
+2. **Generate a challenge** (server -> client).
+   - Generate random challenge data.
+   - Send it to the browser with the stored credential ID list.
+3. **Call the authenticator** (client -> authenticator).
+   - Call `navigator.credentials.get()`.
+   - Pass data to the authenticator.
+4. **Verify the user and sign** (authenticator).
+   - Look for private keys matching the credential IDs.
+   - Request a PIN or biometrics such as a fingerprint or Face ID.
+   - Sign the challenge with the stored private key.
+5. **Send the signature** (authenticator -> client -> server).
+   - Forward the signature through the browser to the server.
+6. **Verify and complete** (server).
+   - Verify with the stored public key and algorithm.
+   - On success, log the user in.
+
+## Implementing WebAuthn Authentication with Go
+
+Let’s implement authentication with Go + Gin. Each step of the **WebAuthn workflow** also appears in the code comments!
+
+> See the complete code in [gymynnym/learn-webauthn](https://github.com/gymynnym/learn-webauthn).
+
+```sh
+$ mkdir learn-webauthn && cd learn-webauthn/
+$ go mod init learn-webauthn
+$ go get -u github.com/gin-gonic/gin
+$ go get -u github.com/go-webauthn/webauthn/webauthn
+```
+
+### Initialize Gin and WebAuthn
+
+```go
+// model.go
+package main
+
+type RegistrationCache struct {
+	SessionData webauthn.SessionData
+	PendingUser *User
+}
+```
+
+`RegistrationCache` is temporary registration storage.
+
+- `SessionData`: used to verify registration.
+- `PendingUser`: user to save after successful verification.
+
+```go
+// main.go
+package main
+
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/go-webauthn/webauthn/webauthn"
+)
+
+const ( // Gin server configuration
+	HOSTNAME = "localhost"
+	PORT     = ":8080"
+)
+
+var (
+	userDB                  = map[string]*User{}                 // in-memory DB (username -> User)
+	registerationCacheStore = map[string]*RegistrationCache{}    // In-memory registration cache (username -> RegistrationCache)
+	loginSessionStore       = map[string]*webauthn.SessionData{} // In-memory login cache (username -> SessionData)
+	webAuthn                *webauthn.WebAuthn
+)
+
+func initWebAuthn() { // Initialize the WebAuthn object
+	var err error
+	webAuthn, err = webauthn.New(&webauthn.Config{
+		// Relying Party configuration
+		RPDisplayName: "Example App",
+		RPID:          HOSTNAME,
+		RPOrigins:     []string{"http://" + HOSTNAME + PORT},
+	})
+	if err != nil {
+		panic("Failed to initialize WebAuthn: " + err.Error())
+	}
+}
+
+func main() {
+	initWebAuthn()
+
+	r := gin.Default()
+	if err := r.Run(PORT); err != nil {
+		panic("Failed to start server: " + err.Error())
+	}
+}
+```
+
+- `userDB`: in-memory user database.
+- `registrationCacheStore`: temporary registration storage.
+- `loginSessionStore`: temporary authentication storage.
+- `webAuthn`: WebAuthn object.
+- `main.r`: Gin instance and router.
+
+### Define the User Model
+
+Implement `webauthn.User` to use the model with WebAuthn.
+
+```go
+// webauthn/types.go
+type User interface {
+	WebAuthnID() []byte                // Unique user identifier (up to 64 bytes)
+	WebAuthnName() string              // User account name
+	WebAuthnDisplayName() string       // Human-readable display name
+	WebAuthnCredentials() []Credential // List of credentials
+}
+```
+
+`WebAuthnID` usually uses the database user ID, which may be an integer or UUID. A byte representation accommodates different ID types.
+
+```go
+// model.go
+package main
+
+import (
+	"encoding/binary"
+
+	"github.com/go-webauthn/webauthn/webauthn"
+)
+
+type User struct {
+	ID          uint64
+	Name        string
+	Credentials webauthn.Credentials
+}
+
+func (u *User) WebAuthnID() []byte {
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, u.ID)
+	return b
+}
+func (u *User) WebAuthnName() string                       { return u.Name }
+func (u *User) WebAuthnDisplayName() string                { return u.Name }
+func (u *User) WebAuthnCredentials() []webauthn.Credential { return u.Credentials }
+```
+
+### Implement Registration
+
+```go
+func beginRegistration(c *gin.Context) {
+	username := c.Param("username")
+
+	// Check whether the user exists
+	if _, exists := userDB[username]; exists {
+		c.JSON(409, gin.H{"error": "User already exists"})
+		return
+	}
+
+	// Create the user object
+	user := User{
+		ID:   uint64(len(userDB) + 1),
+		Name: username,
+	}
+
+	// Registration #2: generate challenge and options
+	options, sessionData, err := webAuthn.BeginRegistration(&user)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to begin registration"})
+		return
+	}
+
+	// Cache session data and user information
+	registerationCacheStore[username] = &RegistrationCache{
+		SessionData: *sessionData,
+		PendingUser: &user,
+	}
+	c.JSON(200, options)
+}
+
+func finishRegistration(c *gin.Context) {
+	username := c.Param("username")
+
+	// Retrieve session data and user information
+	cache, exists := registerationCacheStore[username]
+	if !exists {
+		c.JSON(400, gin.H{"error": "No session data found"})
+		return
+	}
+
+	// Registration #6: verification
+	credential, err := webAuthn.FinishRegistration(cache.PendingUser, cache.SessionData, c.Request)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "Failed to finish registration"})
+		return
+	}
+
+	// Registration #6: storage
+	user := cache.PendingUser
+	user.Credentials = append(user.Credentials, *credential) // Add the new credential
+	userDB[username] = user                                  // Save to the user database
+	delete(registerationCacheStore, username)                // Clean up temporary storage
+
+	c.JSON(200, gin.H{"status": "Registration successful"})
+}
+```
+
+```go
+func main() {
+	// ...
+	r.GET("/register/begin/:username", beginRegistration)
+	r.POST("/register/finish/:username", finishRegistration)
+	// ...
+}
+```
+
+`GET /register/begin/:username` starts registration:
+
+1. Check for `username` in the database.
+2. If absent, create `User`.
+3. Generate and return the user’s challenge and options.
+   - Cache `SessionData` and `User` temporarily.
+
+`POST /register/finish/:username` completes registration:
+
+1. Check for cached data matching `username`.
+2. If present, verify the client’s signature.
+3. On success, save the cached `User` and credential in the database.
+4. Clean up temporary storage and finish.
+
+### Implement Authentication
+
+```go
+func beginLogin(c *gin.Context) {
+	username := c.Param("username")
+
+	// Retrieve the user and check existence
+	user, exists := userDB[username]
+	if !exists {
+		c.JSON(404, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Authentication #2: generate a challenge
+	options, sessionData, err := webAuthn.BeginLogin(user)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to begin login"})
+		return
+	}
+
+	loginSessionStore[username] = sessionData
+	c.JSON(200, options)
+}
+
+func finishLogin(c *gin.Context) {
+	username := c.Param("username")
+
+	// Retrieve the user and check existence
+	user, exists := userDB[username]
+	if !exists {
+		c.JSON(404, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Retrieve cached session data
+	sessionData, exists := loginSessionStore[username]
+	if !exists {
+		c.JSON(400, gin.H{"error": "No session data found"})
+		return
+	}
+
+	// Authentication #6: verification
+	credential, err := webAuthn.FinishLogin(user, *sessionData, c.Request)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "Failed to finish login"})
+		return
+	}
+	_ = credential // TODO: Issue a session or token using the credential
+
+	delete(loginSessionStore, username) // Clean up temporary storage
+
+	c.JSON(200, gin.H{"status": "Login successful"})
+}
+```
+
+```go
+func main() {
+	// ...
+	r.GET("/login/begin/:username", beginLogin)
+	r.POST("/login/finish/:username", finishLogin)
+	// ...
+}
+```
+
+`GET /login/begin/:username` starts authentication:
+
+1. Check for `username` in the database.
+2. If present, generate and return a challenge.
+   - Cache `SessionData` in temporary login storage.
+
+`POST /login/finish/:username` completes authentication:
+
+1. Check for `username` in the database.
+2. Retrieve cached login `SessionData`.
+3. If present, verify.
+4. On success, issue a session or token for the login.
+5. Clean up temporary storage and finish.
+
+### Implement the Client
+
+```html
+<div>
+  <h1>Passkey Demo (Go + Gin)</h1>
+</div>
+<div>
+  <label>Username: <input type="text" id="username" value="foo" /></label>
+  <br />
+  <button onclick="register()">Register a passkey</button>
+  <button onclick="login()">Sign in with a passkey</button>
+</div>
+<div id="logs" />
+```
+
+```js
+// Logging utility
+const logEl = document.getElementById('logs');
+function log(msg) {
+  logEl.innerText = `${logEl.innerText}\n${msg}`;
+}
+
+// URL-safe Base64 encoding/decoding utilities
+function bufferDecode(value) {
+  return Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+}
+function bufferEncode(value) {
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(value)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
+async function register() {
+  const username = document.getElementById('username').value;
+
+  try {
+    // Registration #1: registration request
+    const beginRes = await fetch(`/register/begin/${username}`);
+    const options = await beginRes.json();
+
+    // Registration #3: call the authenticator
+    log('[Register] call authenticator');
+    options.publicKey.challenge = bufferDecode(options.publicKey.challenge);
+    options.publicKey.user.id = bufferDecode(options.publicKey.user.id);
+    const credential = await navigator.credentials.create({ publicKey: options.publicKey });
+
+    // Registration #5: send the signature result
+    const credentialJSON = {
+      id: credential.id,
+      rawId: bufferEncode(credential.rawId),
+      type: credential.type,
+      response: {
+        attestationObject: bufferEncode(credential.response.attestationObject),
+        clientDataJSON: bufferEncode(credential.response.clientDataJSON),
+      },
+    };
+    const finishRes = await fetch(`/register/finish/${username}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentialJSON),
+    });
+
+    const finishJSON = await finishRes.json();
+    log('[Register] finished: ' + JSON.stringify(finishJSON));
+  } catch (e) {
+    log('Error: ' + e);
+    console.error(e);
+  }
+}
+
+async function login() {
+  const username = document.getElementById('username').value;
+  try {
+    // Authentication #1: login request
+    const beginRes = await fetch(`/login/begin/${username}`);
+    const options = await beginRes.json();
+
+    // Authentication #3: call the authenticator
+    log('[Login] call authenticator');
+    options.publicKey.challenge = bufferDecode(options.publicKey.challenge);
+    options.publicKey.allowCredentials.forEach((c) => {
+      c.id = bufferDecode(c.id);
+    });
+    const assertion = await navigator.credentials.get({ publicKey: options.publicKey });
+
+    // Authentication #5: send the signature result
+    const assertionJSON = {
+      id: assertion.id,
+      rawId: bufferEncode(assertion.rawId),
+      type: assertion.type,
+      response: {
+        authenticatorData: bufferEncode(assertion.response.authenticatorData),
+        clientDataJSON: bufferEncode(assertion.response.clientDataJSON),
+        signature: bufferEncode(assertion.response.signature),
+        userHandle: assertion.response.userHandle ? bufferEncode(assertion.response.userHandle) : null,
+      },
+    };
+    const finishRes = await fetch(`/login/finish/${username}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(assertionJSON),
+    });
+
+    const finishJSON = await finishRes.json();
+    log('[Login] finished: ' + JSON.stringify(finishJSON));
+  } catch (e) {
+    log('Error: ' + e);
+    console.error(e);
+  }
+}
+```
+
+`register` runs when “Register a passkey” is clicked:
+
+1. Read `input#username`.
+2. Request registration and receive `PublicKeyCredentialCreationOptions`.
+3. Decode data and call the authenticator.
+4. Sign in the authenticator.
+5. Encode and send the result with the registration completion request.
+6. Receive the completion response and log it.
+
+`login` runs when “Sign in with a passkey” is clicked:
+
+1. Read `input#username`.
+2. Request authentication and receive `PublicKeyCredentialRequestOptions`.
+3. Decode data and call the authenticator.
+4. Sign in the authenticator.
+5. Encode and send the result with the authentication completion request.
+6. Receive the completion response and log it.
+
+### Results
+
+![passkey_result.png](https://assets.akuk.in/blog/in-content/1767881400466_passkey_result.webp 'Output after passkey registration and login')
+
+`navigator.credentials` requires `https`, except in local development!
+
+## Closing Thoughts
+
+WebAuthn (passkeys) lets users manage their own secrets without storing them on the server. A server compromise therefore does not expose those secrets, making it an appealing method. However, not everyone has the necessary setup: some do not use password managers, and some hardware lacks a TPM. Services tend to offer WebAuthn as an additional option rather than being WebAuthn-only (passwordless). Settings like “Prefer passkey login” are appearing, but this still feels transitional. Password login may simply be too convenient to disappear. :(

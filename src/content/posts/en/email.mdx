@@ -1,0 +1,258 @@
+---
+title: 'Email: Practicing Digital Courtesy'
+description: 'How modern email works: SMTP, POP3, IMAP, SPF, DKIM, DMARC, and end-to-end encryption, and why this decades-old technology still matters.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/%EC%9D%B4%EB%A9%94%EC%9D%BC_%20%EB%94%94%EC%A7%80%ED%84%B8%20%EC%98%88%EC%9D%98%EB%A5%BC%20%EA%B0%96%EC%B6%94%EB%8A%94%20%EB%B2%95.png
+publishedAt: '2026-01-23T00:51:55.332409'
+updatedAt: '2026-01-23T00:55:36.918997+00:00'
+topics: ['uncategorized']
+author: 'gymynnym'
+draft: false
+---
+
+# Email: Practicing Digital Courtesy
+
+## Email Overview
+
+**Email (electronic mail)** sends and receives messages using electronic devices. The first email was sent over ARPANET in 1971, when the `username@hostname` format appeared; it is still used today. Wondering whether technology from 1971 remains safe, I explored how modern email works.
+
+## Email Protocols
+
+Protocols separate **sending and receiving**. Modern systems commonly use **SMTP** to send and **IMAP** to receive.
+
+### SMTP/ESMTP: Sending Protocol
+
+**SMTP (Simple Mail Transfer Protocol)** sends email over networks, using these components:
+
+1. **MUA(Mail User Agent)**
+   - The user’s email client.
+   - Gmail app, Thunderbird, and others.
+2. **MSA(Mail Submission Agent)**
+   - The server initially receiving email from the MUA.
+3. **MTA(Mail Transfer Agent)**
+   - Queries DNS MX records to find the recipient’s MTA and relay mail.
+   - Postfix, Sendmail, and others.
+4. **MDA(Mail Delivery Agent)**
+   - Stores mail from the MTA in the user’s mailbox.
+   - The user accesses it through POP3 or IMAP.
+
+SMTP is conversational. Here, C means client and S means server:
+
+#### 1. TCP Connection and Server Response
+
+```
+S -> C : 220 mail.example.org ESMTP
+```
+
+- The server responds first when the session starts.
+- 220 means the SMTP service is ready.
+
+#### 2. Client Greeting (HELO/EHLO)
+
+```
+C -> S : EHLO client.example.org
+// The server returns supported extensions in a 250 response
+S -> C : 250-mail.example.org
+S -> C : 250-STARTTLS
+S -> C : 250-AUTH PLAIN LOGIN
+S -> C : 250 SIZE 52428800
+```
+
+- `HELO`: start basic SMTP.
+- `EHLO`: start **ESMTP (Extended SMTP)**.
+
+#### 3-1. TLS Connection (STARTTLS)
+
+```
+C -> S : STARTTLS
+S -> C : 220 Ready to start TLS
+```
+
+Perform the handshake, then send EHLO again after TLS starts.
+
+#### 3-2. Authentication (AUTH)
+
+```
+C -> S : AUTH LOGIN
+// Username/password authentication
+S -> C : 235 Authentication successful
+```
+
+Without TLS, intermediaries can inspect `AUTH LOGIN` packets, so `STARTTLS` is essential.
+
+> `AUTH LOGIN` is interactive. `AUTH PLAIN` sends a Base64-encoded NUL + username + NUL + password in one step.
+
+#### 4. Specify Sender and Recipient
+
+```
+C -> S : MAIL FROM:<sender@example.org>
+S -> C : 250 OK
+C -> S : RCPT TO:<receiver@example.org>
+S -> C : 250 OK
+```
+
+#### 5. Send the Body
+
+```
+C -> S : DATA
+S -> C : 354 End data with <CR><LF>.<CR><LF>
+
+From: sender@example.org
+To: receiver@example.org
+Subject: This is the email subject.
+
+This is the email body.
+.
+
+S -> C : 250 Message accepted for delivery
+```
+
+#### 6. Internal Server Processing
+
+After the session ends, the server usually:
+
+- Queries DNS MX records for the recipient address.
+  - For local users, passes mail to the MDA for storage.
+  - Otherwise, relays mail to a remote MTA via SMTP.
+
+> **SMTP**, like HTTP, is a protocol, not an implementation. Just as Nginx and Caddy implement HTTP, Postfix implements SMTP. **Internal processing is the implementation’s responsibility**, outside the SMTP specification.
+
+#### 7. Close the Connection
+
+```
+C -> S : QUIT
+S -> C : 221 Bye
+```
+
+Close the TCP connection.
+
+### POP3/IMAP: Receiving Protocols
+
+The common receiving protocols are **POP3 (Post Office Protocol v3)** and **IMAP (Internet Message Access Protocol)**. Both let an MUA read mail stored by an MDA, with these differences:
+
+| Category              | **POP3**                            | **IMAP**                                   |
+| --------------------- | ----------------------------------- | ------------------------------------------ |
+| Storage               | User’s local device                 | Server                                     |
+| Multiple devices      | Cannot sync                         | Can sync                                   |
+| Speed                 | Slow initial load: downloads bodies | Fast initial load: downloads headers first |
+| Backup responsibility | User                                | Server administrator                       |
+
+**POP3** resembles collecting letters from a post office, placing more responsibility on users. **IMAP** treats the server like a file server and syncs locally, leaving the mail stored on the server.
+
+#### POP3
+
+```
+// Authentication
+C -> S : USER username
+S -> C : +OK
+C -> C : PASS p@ssw0rd
+S -> C : +OK Logged in.
+```
+
+```
+C -> S : LIST // Retrieve the message list
+C -> S : RETR 1 // Retrieve message 1
+C -> S : DELE 1 // Mark message 1 for deletion
+C -> S : QUIT // Disconnect and request deletion of marked messages
+S -> C : +OK Bye
+```
+
+Network transfers may **disconnect midway**. To avoid losing mail during retrieval, POP3 uses **deletion marking**: `DELE` marks a message, and `QUIT` requests its actual removal from the server.
+
+> Users rarely want to manage mail data themselves, and businesses even less so. IMAP is now the standard. :(
+
+## Email Security
+
+### SPF
+
+**SPF (Sender Policy Framework)** specifies sending-server IPs to defend against sender spoofing. Configure it through [DNS TXT records](https://www.cloudflare.com/learning/dns/dns-records/dns-txt-record/).
+
+SPF TXT records use this format:
+
+```
+example.org.  IN  TXT  "v=spf1 ip4:192.0.2.0/24 include:_spf.google.com ~all"
+```
+
+- `v=spf1`: SPF version.
+- `ip4/ip6`: allow IP addresses or ranges.
+- `include`: reference another domain’s SPF, for external mail providers.
+- `all` **policy**:
+  - `-all`: reject.
+  - `~all`: accept, but classify as spam.
+  - `?all`: no policy.
+
+Forwarding can fail SPF because the intermediary’s IP is absent from the record. SPF is commonly combined with **DKIM** to compensate.
+
+### DKIM
+
+**DKIM (DomainKeys Identified Mail)** uses **public-key digital signatures** in headers to prove mail was not altered in transit. It also uses [DNS TXT records](https://www.cloudflare.com/learning/dns/dns-records/dns-txt-record/).
+
+DKIM needs a server-generated **public/private key pair**. Recipients verify a signature created with the private key using the public key, published in a DKIM TXT record:
+
+```
+selector._domainkey.example.org.  IN  TXT  "v=dkim1; k=rsa; p=..."
+```
+
+- `selector`: DKIM selector.
+  - A domain may have multiple keys.
+  - Headers contain the selector used to query a key.
+- `v=dkim1`: use DKIM version 1.
+- `k=rsa`: RSA algorithm.
+- `p=...`: public key.
+
+Verification proceeds as follows:
+
+1. Inspect the `DKIM-Signature` header.
+   - It includes signature (`b`), selector (`s`), domain (`d`), and other metadata.
+2. Combine `s` and `d` to query DNS TXT for the public key and algorithm.
+3. Verify the signature and body hash with the public key according to header rules.
+   - Success: `pass`.
+   - Failure: `fail`.
+   - No signature header: `none`.
+
+### DMARC
+
+**DMARC (Domain-based Message Authentication, Reporting, and Conformance)** tells receiving servers how to handle mail based on SPF and DKIM results. Configure it in [DNS TXT records](https://www.cloudflare.com/learning/dns/dns-records/dns-txt-record/).
+
+DMARC TXT records use this format:
+
+```
+_dmarc.example.org.  IN  TXT  "v=DMARC1; p=quarantine; adkim=s; aspf=s;"
+```
+
+- `v=DMARC1`: version.
+- `p`: policy.
+  - `none`: do not block.
+  - `quarantine`: isolate in spam.
+  - `reject`: reject delivery.
+- `adkim`: DKIM alignment.
+  - `r`: relaxed, allowing a parent of the From domain.
+  - `s`: strict, requiring an exact From-domain match.
+- `aspf`: SPF alignment.
+  - `r`: relaxed, allowing a parent of the From domain.
+  - `s`: strict, requiring an exact From-domain match.
+- `rua`, `ruf`: report recipient addresses.
+  - DMARC can collect aggregate and failure reports as well as define policy.
+
+> **Alignment** checks whether the From domain matches the domain used for authentication.
+
+### End-to-end Encryption (E2EE)
+
+> We have covered spoofing and verification; next come privacy, sniffing, and security.
+
+Services such as [Proton Mail](https://proton.me/mail) support **end-to-end encryption**: content is encrypted and only end users can decrypt it. Technically, even Proton cannot read it.
+
+Proton commonly uses [**PGP**](https://proton.me/support/how-to-use-pgp) with **public/private key pairs**. Recipients publish a public key for senders to encrypt with, then decrypt received mail using their private key.
+
+This applies between Proton Mail or other compatible services. Sending to a service without E2EE, such as Gmail, breaks that protection. [Password-protected Emails](https://proton.me/support/password-protected-emails) offer a workaround, but **that is no longer email technology itself**.
+
+## Closing Thoughts
+
+> Why still use technology from 1971?
+
+VoLTE and SMS seem even more questionable, but today I explored email. I think it persists because of **control**. Organizations want to manage accounts and messages under their own rules; email makes that relatively natural and easy to build.
+
+Business email therefore feels like saying, “I will politely deliver a message to your organization’s server, following your rules.”
+
+For more casual messages, people often use instant messengers.
+
+SPF, DKIM, E2EE, and other security technologies have evolved too, so we can still use email with confidence.

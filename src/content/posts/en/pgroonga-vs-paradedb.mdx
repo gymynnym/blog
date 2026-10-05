@@ -1,0 +1,301 @@
+---
+title: 'PGroonga vs ParadeDB: The FTS Showdown'
+description: 'Compare PostgreSQL full-text search extensions PGroonga and ParadeDB for Korean search: tokenizers, TF versus BM25 scoring, ORM integration, and read/write benchmarks.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/PGroonga%20vs%20ParadeDB_%20FTS%20%EC%B5%9C%EA%B0%95%EC%9E%90.png
+publishedAt: '2026-03-06T11:07:11.762744'
+updatedAt: '2026-03-06T11:13:55.487463+00:00'
+topics: ['postgresql']
+author: 'gymynnym'
+draft: false
+---
+
+# PGroonga vs ParadeDB: The FTS Showdown
+
+## Introduction
+
+> As of March 2026, LogHub uses [PGroonga](/en/posts/pgroonga-guide-1), PostgreSQL’s multilingual FTS extension, for search.
+
+I recently discovered [ParadeDB](https://www.paradedb.com/), a project with a similar goal. Both run as PostgreSQL extensions, providing powerful FTS without operating a separate engine such as Elasticsearch. Their libraries, internals, and usage differ considerably, however.
+
+Let’s **compare PGroonga and ParadeDB from the perspective of Korean full-text search**.
+
+## Functional Differences
+
+Here is a brief comparison:
+
+| Category                  | PGroonga           | ParadeDB          |
+| ------------------------- | ------------------ | ----------------- |
+| Internal engine           | Groonga            | Tantivy           |
+| Tokenizer                 | Mecab/Mecab-ko     | Lindera           |
+| Scoring algorithm         | TF                 | BM25              |
+| Score function usage      | Relatively verbose | Relatively simple |
+| Custom synonym dictionary | Supported          | Unsupported       |
+
+### Internal Engine
+
+PGroonga uses [Groonga](https://github.com/groonga/groonga/), written in C, with the TF keyword scoring algorithm discussed below.
+
+ParadeDB uses [Tantivy](https://github.com/quickwit-oss/tantivy), written in Rust, with the BM25 algorithm discussed below.
+
+### Tokenizer
+
+PGroonga **does not provide a Korean tokenizer by default**. For this comparison, I installed [Mecab-ko](https://bitbucket.org/eunjeon/mecab-ko) and the mecab-ko-dic dictionary.
+
+> This takes advantage of the matching interfaces of the Japanese Mecab tokenizer and Korean Mecab-ko. See [Using a Korean Tokenizer with PGroonga](/en/posts/pgroonga-guide-5).
+
+ParadeDB **supports Korean tokenization by default**. It uses the Rust-based [Lindera](https://github.com/lindera/lindera), designed to handle **CJK (Chinese, Japanese, Korean)** when supplied with dictionaries. For Korean, ParadeDB uses **[KoDic](https://github.com/lindera/mecab-ko-dic)**, a fork based on Mecab-ko-dic.
+
+### Scoring
+
+**Scoring** calculates relevance in FTS. Groonga uses TF by default, while Tantivy uses BM25.
+
+- **TF (Term Frequency)**: count occurrences of the search term.
+- **BM25 (Best Matching 25)**: TF + IDF + avgDL + other factors.
+  - `IDF`: how rare a word is across all documents.
+  - `avgDL`: average document length.
+
+![bm25.png](https://assets.akuk.in/blog/in-content/1772795045136_bm25.webp 'BM25 formula from Wikipedia')
+
+Groonga does not provide BM25. This is an intentional design choice that lets developers customize TF with field-specific weights.
+
+> TF is also generally faster than BM25.
+
+### Using Score Functions
+
+Calling the relevance function is **simpler in ParadeDB**.
+
+PGroonga’s `pgroonga_score` requires `ctid` and `tableoid`. These are PostgreSQL internal identifiers and can be awkward to handle in an ORM.
+
+ParadeDB’s `pdb.score` needs only the unique identifier specified by `key_field` when creating the index. ORM applications can therefore use it without exposing extra internal fields.
+
+### Other Features
+
+PGroonga supports [Groonga’s query syntax](https://groonga.org/docs/reference/grn_expr/query_syntax.html), similar to Google search, so applications can handle complex user queries without extra implementation. `pgroonga_condition` provides field weights, and `pgroonga_query_expand` supports custom synonym dictionaries.
+
+ParadeDB uses Tantivy syntax instead and does not support custom synonym dictionaries.
+
+> As of March 2026, ParadeDB is at `0.21.x` and has not yet reached an official release.
+
+## Benchmark Setup
+
+I used Docker to test each extension in a separate environment.
+
+#### docker-compose.yml
+
+```yml
+services:
+  my-pgroonga:
+    container_name: my-pgroonga
+    image: ghcr.io/akuk.in/postgres:0.2.0
+    shm_size: 1g
+    volumes:
+      - ./pgroonga/init/:/docker-entrypoint-initdb.d/
+    env_file: .env.postgres
+  my-paradedb:
+    container_name: my-paradedb
+    image: paradedb/paradedb:latest
+    shm_size: 1g
+    volumes:
+      - ./paradedb/init/:/docker-entrypoint-initdb.d/
+    env_file: .env.postgres
+```
+
+PGroonga needs a custom image for Korean tokenization. I used LogHub’s `ghcr.io/akuk.in/postgres:0.2.0`, which includes PGroonga + Mecab-ko.
+
+ParadeDB already includes a Korean tokenizer, so I used its official image.
+
+The `.env` file simply contains a username and password.
+
+#### pgroonga/init/01-ddl.sql
+
+Create the PGroonga example table:
+
+```
+\c postgres
+
+CREATE EXTENSION IF NOT EXISTS pgroonga;
+
+CREATE TABLE IF NOT EXISTS public.posts (
+    id                  bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    title               text         NOT NULL,
+    content             text         NOT NULL,            -- for search
+    topics_flat         text         NOT NULL DEFAULT ''  -- for search
+);
+
+CREATE INDEX IF NOT EXISTS posts_fts_idx ON public.posts
+USING pgroonga (
+  (ARRAY [title, content, topics_flat]))
+WITH (
+  tokenizer='TokenMecab',
+  normalizer='NormalizerAuto'
+);
+```
+
+1. Enable `pgroonga`.
+2. Create the example `posts` table.
+3. Add an FTS index to `posts`.
+   - Use Mecab-ko as the tokenizer.
+
+#### paradedb/init/01-ddl.sql
+
+Create the ParadeDB example table:
+
+```
+\c postgres
+
+CREATE EXTENSION IF NOT EXISTS pg_search;
+
+CREATE TABLE IF NOT EXISTS public.posts (
+    id                  bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    title               text         NOT NULL,
+    content             text         NOT NULL,            -- for search
+    topics_flat         text         NOT NULL DEFAULT ''  -- for search
+);
+
+CREATE INDEX IF NOT EXISTS posts_fts_idx ON public.posts
+USING bm25 (
+  id,
+  (title::pdb.lindera(korean, 'trim=true', 'remove_short=2')),
+  (content::pdb.lindera(korean, 'trim=true', 'remove_short=2')),
+  (topics_flat::pdb.simple)
+)
+WITH (key_field = 'id');
+```
+
+1. Enable `pg_search` (ParadeDB).
+2. Create the example `posts` table.
+3. Add an FTS index to `posts`.
+   - Use Lindera (Korean).
+
+#### Generate Seed Data with Faker.js
+
+For the benchmark’s seed-data SQL, I used [Faker.js](https://fakerjs.dev/), an **easy-to-use fake-data generator with Korean text support**.
+
+Faker.js generates many kinds of fake data, including test text. I used it to write a simple seed-generation script.
+
+```js
+import fs from 'fs';
+import { fakerKO as faker } from '@faker-js/faker';
+
+const NUM_ROWS = 1_000_000; // Number of dummy rows to generate
+const OUTPUT_FILE = '02-dml.sql';
+
+const techPool = [
+  { key: 'java', name: 'Java' },
+  { key: 'cpp', name: 'C++' },
+  { key: 'python', name: 'Python' },
+  { key: 'javascript', name: 'JavaScript' },
+  { key: 'react', name: 'React' },
+  { key: 'spring', name: 'Spring' },
+  { key: 'nodejs', name: 'Node.js' },
+  { key: 'postgres', name: 'PostgreSQL' },
+  { key: 'aws', name: 'AWS' },
+  { key: 'docker', name: 'Docker' },
+];
+
+let sqlContent = ``;
+
+for (let i = 0; i < NUM_ROWS; i++) {
+  const title = faker.lorem.sentence();
+  const content = faker.lorem.paragraphs(3);
+  const selectedTopics = faker.helpers.arrayElements(techPool, { min: 1, max: 3 });
+  const topicsFlat = selectedTopics.map((topic) => `${topic.key},${topic.name}`).join(':');
+
+  const safeTitle = title.replace(/'/g, "''");
+  const safeContent = content.replace(/'/g, "''");
+  const safeTopics = topicsFlat.replace(/'/g, "''");
+
+  sqlContent += `INSERT INTO public.posts (title, content, topics_flat) VALUES ('${safeTitle}', '${safeContent}', '${safeTopics}');\n`;
+}
+
+fs.writeFileSync(OUTPUT_FILE, sqlContent, 'utf-8');
+```
+
+### Benchmark and Results
+
+The benchmark environment was:
+
+- PostgreSQL 18
+- `shm_size` : 1g
+- Storage: NVMe SSD (PCIe 3.0).
+
+These were the benchmark queries:
+
+> Their syntaxes differ, so queries producing exactly identical results were limited.
+
+```sql
+-- PGroonga query
+SELECT id, title
+FROM public.posts
+WHERE ARRAY[title, content, topics_flat] &@~ pgroonga_condition(
+    query => ?1,
+    weights => ARRAY[5, 2, 3],
+    index_name => 'posts_fts_idx'
+)
+ORDER BY pgroonga_score(tableoid, ctid) DESC;
+```
+
+```sql
+-- ParadeDB query
+SELECT id, title
+FROM public.posts
+WHERE (
+    title &&& ?1::pdb.boost(5)
+    OR content &&& ?1::pdb.boost(2)
+    OR topics_flat &&& ?1::pdb.boost(3)
+)
+ORDER BY pdb.score(id) DESC;
+```
+
+Both queries require the search terms with AND conditions and return results sorted by descending relevance.
+
+Here are average results from 1,000 repetitions with a warm cache:
+
+| Metric                    | PGroonga + Mecab-ko | ParadeDB + Lindera |
+| ------------------------- | ------------------- | ------------------ |
+| FTS latency               | 881ms               | 1112ms             |
+| Concurrent INSERT latency | 1531 ms             | 254ms              |
+| Concurrent INSERT TPS     | 6.53                | 39.30              |
+
+> Measured with `pg_bench`.
+
+PGroonga + Mecab-ko was roughly 1.3 times faster for average FTS reads, while ParadeDB dominated writes (index updates), at around six times faster.
+
+I also tried comparing index sizes. ParadeDB reports its size through `pg_relation_size`, but PGroonga uses separate Groonga storage, making comparison difficult. [Related issue](https://github.com/pgroonga/pgroonga/issues/15). :(
+
+### Question: Why Do Relevance Scores Differ?
+
+Despite assigning identical weights, the sorted results were very different, and some rows were even missing.
+
+I wondered whether Lindera was working correctly and inspected its tokenizer output.
+
+```sql
+SELECT array_agg(token->>'value') AS tokens
+FROM json_array_elements(
+  (pgroonga_command(
+    'tokenize TokenMecab "계승/발전과 범죄에 의무교육은 범죄에 장기 판결이 조약과 기능을 범죄를 청구할 수 있다."'
+  )::json)->1
+) AS token;
+-- {계승,/,발전,과,범죄,에,의무,교육,은,범죄,에,장기,판결,이,조약,과,기능,을,범죄,를,청구,할,수,있,다,.}
+
+SELECT '계승/발전과 범죄에 의무교육은 범죄에 장기 판결이 조약과 기능을 범죄를 청구할 수 있다.'::pdb.lindera(korean)::text[] AS tokens;
+-- {계승,발전,과,범죄,에,의무,교육,은,범죄,에,장기,판결,이,조약,과,기능,을,범죄,를,청구,할,수,있,다}
+```
+
+Tokenization was correct. Trying Tantivy syntax yielded the same results.
+
+The difference came from the scoring algorithms discussed earlier. PGroonga counts term occurrences with TF, while ParadeDB’s BM25 takes more variables into account.
+
+Choose the extension that best suits your application’s characteristics.
+
+## Closing Thoughts
+
+We have briefly compared the PostgreSQL FTS extensions PGroonga and ParadeDB.
+
+I plan to **experiment with ParadeDB in LogHub**. Its much lower index-update cost (concurrent write performance) is the main reason. Removing ORM-unfriendly fields such as `ctid` and `tableoid` is another benefit.
+
+The tradeoff is losing custom synonym dictionaries and Groonga query syntax. Since it is not yet a formal release, I will first test it in an experimental environment.
+
+Using the powerful Rust-based Tantivy engine directly inside PostgreSQL is very appealing. BM25’s ability to produce more sophisticated, higher-quality results is impressive as well.
+
+[![Giratina](https://img.pokemondb.net/sprites/black-white/anim/normal/giratina-altered.gif)](https://pokemondb.net/pokedex/giratina)

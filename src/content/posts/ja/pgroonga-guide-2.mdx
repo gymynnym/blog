@@ -1,0 +1,139 @@
+---
+title: 'PGroongaの基本的な使い方'
+description: 'PGroonga公式DockerイメージでPostgreSQLを起動し、拡張機能を有効にします。インデックスの作成、全文検索、配列インデックスによる複数列の検索を紹介します。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/PGroonga%20%EA%B0%80%EC%9D%B4%EB%93%9C.png
+publishedAt: '2025-12-02T00:23:20.373414'
+updatedAt: '2025-12-04T00:19:32.509813'
+topics: ['postgresql', 'docker']
+series: 'pgroonga-guide'
+seriesOrder: 2
+author: 'gymynnym'
+draft: false
+---
+
+# PGroongaの基本的な使い方
+
+## PGroongaのインストール
+
+**PGroonga**はPostgreSQLの拡張機能なので、PostgreSQLがインストールされた環境に導入する必要があります。
+
+[インストール手順](https://pgroonga.github.io/install/)はOSやPostgreSQLのバージョンで異なり複雑なため、ここでは[公式Dockerイメージ](https://github.com/pgroonga/docker)を使います。
+
+以下はPGroongaを含むPostgreSQLイメージを起動する`docker-compose.yml`です。
+
+```yaml
+services:
+  my-pgroonga:
+    container_name: my-pgroonga
+    image: groonga/pgroonga:4.0.4-alpine-18
+    shm_size: 128mb
+    env_file: .env.postgres
+```
+
+`.env.postgres`には、ユーザー名やパスワードなどのPostgreSQL設定を記述してください。
+
+```
+$ docker compose up -d
+$ docker exec -it my-pgroonga psql -U <username>
+```
+
+上記のコマンドでPostgreSQLを起動し、接続します。別の方法で接続しても構いません。
+
+```sql
+CREATE EXTENSION pgroonga;
+```
+
+上記のクエリでPGroonga拡張機能を有効にします。
+
+## PGroongaの基本的な使い方
+
+### 1. サンプルテーブルを作成する
+
+```sql
+CREATE TABLE articles (
+    id SERIAL PRIMARY KEY,
+    title TEXT,
+    content TEXT
+);
+```
+
+`articles`テーブルは、`id`（主キー）、`title`（タイトル）、`content`（本文）の列で構成されます。
+
+### 2. PGroongaインデックスを作成する
+
+PGroongaはGroongaをインデックスエンジンとして統合しています。Groonga検索エンジンを使うには、PGroongaインデックスを作成します。
+
+```sql
+CREATE INDEX articles_title_pgroonga_idx
+ON public.articles USING pgroonga (title)
+WITH (tokenizer='TokenBigram');
+
+CREATE INDEX articles_content_pgroonga_idx
+ON public.articles USING pgroonga (content)
+WITH (tokenizer='TokenBigram');
+```
+
+- `articles_title_pgroonga_idx`は、`title`という**単一の列**にインデックスを作ります。
+- `articles_content_pgroonga_idx`は、`content`という**単一の列**にインデックスを作ります。
+
+トークナイザーには`TokenBigram`を使います。標準のトークナイザーの中では韓国語に最も適しています。
+
+> `Mecab-ko`トークナイザーも使えます。後の章で詳しく扱います。
+
+```sql
+SELECT jsonb_pretty(pgroonga_command('tokenize TokenBigram "이것은 첫 번째 기사입니다."')::jsonb);
+```
+
+上記のコマンドでトークン化の結果を確認できます。
+
+### 3. サンプルデータを挿入する
+
+```sql
+INSERT INTO articles (title, content) VALUES
+('첫 번째 기사', '이것은 첫 번째 기사입니다.'),
+('두 번째 기사', '이것은 두 번째 기사입니다.'),
+('세 번째 기사', '이것은 세 번째 기사입니다.');
+```
+
+### 4. PGroonga FTS : `&@~`
+
+```sql
+SELECT * FROM articles
+WHERE title &@~ '첫 번째' OR content &@~ '첫 번째';
+--  id |    title     |          content
+-- ----+--------------+----------------------------
+--   1 | 첫 번째 기사 | 이것은 첫 번째 기사입니다.
+```
+
+`&@~`演算子はPGroongaの全文検索を実行します。
+
+左辺には検索対象の列、右辺には検索キーワードを指定します。キーワードには[Groongaのクエリ構文](https://groonga.org/docs/reference/grn_expr/query_syntax.html)も使えます。
+
+よく使うGroongaクエリ演算子は次のとおりです。
+
+- `KEYWORD1 AND KEYWORD2`：AND演算子。
+- `KEYWORD1 OR KEYWORD2`：OR演算子。
+- `KEYWORD1 -KEYWORD2`：キーワードを除外する演算子。
+
+### 5. 複数列の検索
+
+ここまで進めると、何か気になる点に気づいたかもしれません。
+
+> `articles`テーブルの検索対象の列が増えたらどうなるでしょうか？
+
+そのとおりです。毎回`OR`条件で検索クエリを書くのは面倒ですし、複数のインデックスを使うため性能もよくありません。
+
+幸い、PGroongaは`text[]`型のインデックスもサポートしています。検索対象の列を配列にまとめ、一つのインデックスで管理できます。
+
+```sql
+CREATE INDEX articles_pgroonga_idx
+ON public.articles USING pgroonga ((ARRAY [title, content]))
+WITH (tokenizer='TokenBigram');
+
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@~ '첫 번째';
+```
+
+上記のクエリでは、`title`と`content`を配列にまとめて一つのPGroongaインデックスを作り、その配列で検索します。
+
+これで検索対象の列が増えても、一つのインデックスと一つのクエリで検索できます！

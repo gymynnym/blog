@@ -1,0 +1,38 @@
+---
+title: '結論'
+description: 'WireGuardは4,000行未満のコードベース、高性能、幅広いプラットフォーム対応、単純な暗号鍵ルーティング、未認証パケットに応答しない設計を組み合わせています。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-19T01:17:26.180434'
+updatedAt: '2025-12-19T13:53:25.997026'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 7
+author: 'gymynnym'
+draft: false
+---
+
+# 結論
+
+## 4,000行未満のコードベース
+
+WireGuardのコードは全体で4,000行未満と、IPsecやOpenVPNより非常に小さい規模です。そのため、脆弱性の発見や保守がしやすいという利点があります。
+
+## マルチプラットフォーム
+
+WireGuardはカーネル空間で動作するため高性能です。コードベースも小さく、幅広い機器で利用でき、将来にわたって信頼できるセキュリティ特性を提供します。
+
+## 暗号鍵ルーティング
+
+WireGuardは複雑な設定の代わりに、ピアの**公開鍵と許可されたIPアドレス**だけで接続を許可する単純な方式を使います。セキュリティ事故を防ぎ、管理もしやすくなります。
+
+## 沈黙によるセキュリティ
+
+WireGuardは通常、認証されていないパケットに応答しません。そのためネットワークスキャンが難しく、安全性が高まります。
+
+## 補足：簡単なインストール方法
+
+> 非公式の簡単インストールスクリプト[Nyr/wireguard-install](https://github.com/Nyr/wireguard-install)も利用できます。
+
+```
+$ wget https://git.io/wireguard -O wireguard-install.sh && bash wireguard-install.sh
+```

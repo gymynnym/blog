@@ -1,0 +1,245 @@
+---
+title: 'BitTorrent: Distributing Information at the Turn of the Century'
+description: 'An approachable guide to BitTorrent v2, covering pieces, peer discovery, Merkle verification, choking, transport, security, magnet links, and NAT traversal.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/BitTorrent_%2021%EC%84%B8%EA%B8%B0%20%EC%A0%95%EB%B3%B4%20%EB%AC%BC%EB%AC%BC%EA%B5%90%ED%99%98%20%ED%94%84%EB%A1%9C%ED%86%A0%EC%BD%9C.png
+publishedAt: '2026-01-03T17:37:28.781112'
+updatedAt: '2026-01-05T02:00:48.397056+00:00'
+topics: ['bittorrent']
+author: 'gymynnym'
+draft: false
+---
+
+# BitTorrent: Distributing Information at the Turn of the Century
+
+> This article covers BitTorrent v2, revised based on [BEP 52](https://www.bittorrent.org/beps/bep_0052.html).
+
+> It explains the [BitTorrent paper](https://www.bittorrent.org/bittorrentecon.pdf) by creator Bram Cohen in accessible terms, omitting details specific to v1.
+
+BitTorrent is a P2P (peer-to-peer) file transfer system designed to distribute large files efficiently. It is absolutely not a protocol specifically for illegal file sharing!!!
+
+## 1. How BitTorrent Works
+
+### 1.1. P2P(Peer-to-Peer)
+
+With HTTP distribution, the server usually bears all upload costs. In BitTorrent, users downloading the same file **upload to one another**, distributing the cost and reducing the original publisher’s hosting expense.
+
+### 1.2. Pieces
+
+BitTorrent does not upload one continuous stream. It **splits files into pieces**, typically hundreds of KB to several MB, and manages them as transfer units. Pieces need not arrive in order and are also used for hash-based integrity checks.
+
+Peers can distribute the parts they have even without the full content, eventually delivering the complete file and reducing reliance on any one uploader.
+
+If some pieces fail to transfer, only those pieces need to be requested again, improving efficiency and reliability. :)
+
+> Pieces are actually transferred in smaller **blocks**, generally 16 KB.
+
+### 1.3. Seeders and Leechers
+
+Peers are broadly classified as **seeders** and **leechers**.
+
+- **Seeder**: has the entire file and no longer downloads.
+  - Only uploads (seeds) to other peers.
+- **Leecher**: lacks the complete file and is still downloading.
+  - Uploads pieces it has and downloads missing pieces.
+
+### 1.4. Trackers
+
+A **tracker** helps peers find one another. Although BitTorrent is P2P, trackers are centralized discovery services. Downloaders report the file they are downloading and their listening port; the tracker returns addresses of peers sharing the same file, which downloaders use to connect.
+
+> The tracker’s role is strictly limited to helping peers find each other.
+
+## 2. The BitTorrent Protocol
+
+### 2.1. `.torrent` Files
+
+To distribute a file, publish a `.torrent` file somewhere such as a web server. It does not contain the actual content, but can include:
+
+- `announce`: tracker URL (required).
+- `announce-list`: multiple tracker URLs, used if announce is unavailable.
+- `creation date`: time the torrent was created.
+- `created by`: creating program’s name and version.
+- `comment`: creator’s comment.
+- `encoding`: string encoding, such as UTF-8.
+- `piece layers`: piece hashes for each file.
+- `info`
+  - `meta version`: integer protocol version.
+  - `piece length`: transfer piece size.
+  - `name`: top-level directory or file name.
+  - `file tree`: hierarchical dictionary of file structure and hashes.
+
+This information lets downloaders join the BitTorrent protocol.
+
+```json
+// Example file tree
+{
+  "movie.mp4": {
+    "": {
+      "length": 145020304,
+      "pieces root": "<32-byte-binary-hash>"
+    }
+  },
+  "subs": {
+    "kor.srt": {
+      "": {
+        "length": 30204,
+        "pieces root": "<32-byte-binary-hash>"
+      }
+    }
+  }
+}
+```
+
+### 2.2. Peer Discovery
+
+Joining through a torrent requires discovering the IP:port addresses of peers sharing the same content. Methods include:
+
+1. **Tracker-based discovery**: request peers from a tracker listed in the torrent (centralized).
+   - The traditional method.
+2. **DHT (Distributed Hash Table)**: peers discover one another without trackers (decentralized).
+   - Key concepts:
+     - File IDs and node IDs have the same 32-byte length.
+     - Nodes whose IDs are closest to a file ID, usually at least eight, manage that file’s peer address list.
+       - DHT nodes therefore become **temporary trackers**, whether they want to or not.
+       - Multiple nodes improve network availability and security.
+     - Discovery uses **Kademlia distance**, rather than random searching.
+       - XOR measures how similar two IDs are.
+     - DHT’s goal is to **find the address list for a particular file**.
+   - A seeder registers a file as follows:
+     1. Identify the file ID.
+     2. Use DHT to find nodes closest to that ID.
+     3. Ask those nodes to store the seeder’s address.
+   - A leecher looks up peers as follows:
+     1. Identify the required file ID.
+     2. Use DHT to find nodes closest to that ID.
+     3. Request the file’s peer address list.
+3. **PEX (Peer Exchange)**: existing peers introduce other peers.
+   - It supplements discovery because an initial peer connection is required.
+4. **LPD (Local Peer Discovery)**: find peers on the LAN.
+   - Send multicast discovery signals on the local network.
+   - Avoiding the external network improves speed and saves bandwidth.
+
+> If you are already thinking about man-in-the-middle attacks from address-list nodes, we cover them in the security section; feel free to skip ahead.
+
+### 2.3. Downloading Pieces
+
+BitTorrent transfers pieces rather than a continuous file stream. Downloaders receive the pieces and combine them into the original file.
+
+This enables parallel downloads from several peers and safe integrity verification. Verification uses each file’s `pieces root` in `file tree` and the separate `piece layers` property.
+
+The **piece request and transfer process** is:
+
+1. Obtain the `piece layers` hash list.
+2. Find peers with the required pieces.
+3. Request and collect pieces.
+4. Verify integrity (Merkle proof).
+   - Hash the downloaded blocks, which are subdivisions of pieces.
+   - Combine and hash upward through the Merkle tree to produce the **piece hash**.
+   - Compare it with the corresponding hash in `piece layers`.
+     - If it matches, retain and announce the piece.
+     - Otherwise, discard and request it again.
+
+Piece order is important for performance. BitTorrent uses these **selection strategies**:
+
+- **Strict Priority**: prioritize the remaining blocks of a requested piece.
+  - Obtain a complete piece as soon as possible.
+- **Rarest First**: download the rarest pieces first.
+  - Rarity means fewer peers have the piece.
+  - This greedy choice improves overall availability.
+- **Random First Place**: choose random pieces initially to start participating quickly.
+- **Endgame Mode**: request the final few pieces from all peers.
+  - Slow uploaders can otherwise stall the download.
+  - Request from every peer holding the remaining pieces.
+  - Cancel other requests once a piece arrives to avoid wasting bandwidth.
+
+### 2.4. Combining Pieces
+
+Pieces arrive out of order, so write each at its correct offset. Once downloading finishes, a simple binary assembly produces the **complete file**.
+
+### 2.5. Seeding
+
+With the complete file, you become a **seeder**. Continuing to **seed** for a while after downloading helps sustain the ecosystem.
+
+## 3. TCP, UDP, uTP(μTP)?
+
+### TCP vs UDP
+
+BitTorrent uses both TCP and UDP. It traditionally used TCP, but modern clients often use UDP to avoid consuming all available bandwidth.
+
+### uTP(μTP)
+
+Rather than raw UDP, they use uTP (μTP), adding reliability and congestion control. It reduces torrent speed when other network activity is detected.
+
+uTP (μTP), or Micro Transport Protocol, was first developed by μTorrent. The spelling uTP exists because μ is hard to type. μTorrent is more than just a spyware/adware company!
+
+> uTP is used for file sharing; DHT and other traffic use ordinary UDP.
+
+## 4. Choking
+
+### What Is Choking?
+
+**Choking** temporarily stops uploads to a particular peer.
+
+- **Choked**: no data is sent; requests are refused.
+- **Unchoked**: ready to send data on request.
+
+### When and Why Choke?
+
+Peer bandwidth is vital in P2P. Prioritizing fast peers improves efficiency, while **peers that do not upload properly** are candidates for choking.
+
+### When and Why Unchoke?
+
+Clients usually **reconsider choking every 10 seconds**, unchoking the fastest peers, typically four. Leechers favor peers that send quickly; seeders favor peers that receive quickly.
+
+> Purely performance-based unchoking would give new peers no chance to receive data.
+
+**Optimistic unchoking** tests a random connected peer every 30 seconds. A fast responder can join the unchoked list.
+
+> **Snubbing** means a peer ignores you and sends no data, typically for 60 seconds.
+
+Some peers never upload. BitTorrent treats this as **snubbing** and uses **anti-snubbing**, a retaliation strategy: keep the offending peer choked. Only optimistic unchoking can restore the relationship.
+
+## 5. Security and Anonymity
+
+BitTorrent operates on a public network. Using it without understanding anonymity can expose personal information.
+
+### 5.1. Protocol Encryption (MSE/PE)
+
+Many ISPs detect and throttle P2P traffic. **MSE (Message Stream Encryption) / PE (Protocol Encryption)** uses [RC4](https://en.wikipedia.org/wiki/RC4) to evade this. It is closer to obfuscation and does not hide IP addresses, so **it does not guarantee anonymity**.
+
+### 5.2. Anonymization
+
+A structural property and security risk is that **every peer’s IP is public**. Real anonymity requires hiding the IP with a VPN or proxy. Port forwarding may then fail, potentially making you an unhelpful peer.
+
+### 5.3. DHT Attacks (Sybil Attacks)
+
+The DHT man-in-the-middle threat mentioned earlier is a **Sybil attack**: an attacker creates many fake nodes to control a region of the DHT, intercept requests, insert malware, or snoop.
+
+One simple, strong defense is **restricting node ID generation**. Instead of arbitrary random IDs, nodes must use their **actual IP** to generate IDs. Thousands of real public IPs become necessary, making attacks prohibitively costly.
+
+> Couldn’t an attacker just pass a random IP?
+
+Peer IPs are public, so receivers can compare the actual IP with the node ID and check whether the node is genuine.
+
+## Bonus 1: Magnet Links
+
+Originally, joining required a **physical `.torrent` file**. URI-based **magnet links** let users share just a link, a convenient and widely used alternative.
+
+Magnet links begin with `magnet:` and have this structure:
+
+- `xt`: unique content hash (required).
+  - `urn`: resource name.
+  - `btih`: BitTorrent info hash.
+- `dn`: file name shown before downloading (optional).
+- `tr`: initial tracker URL (optional).
+
+> The tracker URL is optional, and file metadata is absent!
+
+Without a tracker URL, discovery relies entirely on DHT. Metadata must also come from other peers, potentially delaying the download.
+
+This decentralized approach avoids having to report information to a particular tracker.
+
+## Bonus 2: NAT Traversal
+
+Most home PCs are behind NAT and cannot be reached directly without port forwarding. BitTorrent clients use **UPnP (Universal Plug and Play)** to ask routers to open ports automatically, allowing uploads without complex manual configuration.
+
+> Conversely, ports may be exposed externally without the user explicitly deciding to open them!

@@ -1,0 +1,70 @@
+---
+title: 'ついにHomebrewに同時ダウンロードが来た！'
+description: '2025年11月12日にHomebrew 5.0.0が公開されました。同時ダウンロードが標準になり、Linux ARM64がTier 1に昇格し、quarantineフラグは非推奨になりました。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/%EB%93%9C%EB%94%94%EC%96%B4%20homebrew%EA%B0%80%20%EB%B3%91%EB%A0%AC%EC%B2%98%EB%A6%AC.png
+publishedAt: '2025-11-19T20:50:53.961740'
+updatedAt: '2025-11-22T17:15:33.850987+00:00'
+topics: ['uncategorized']
+author: 'gymynnym'
+draft: false
+---
+
+# ついにHomebrewに同時ダウンロードが来た！
+
+2025年11月12日、**Homebrew**が**5.0.0**に更新されました！🎉
+
+## Homebrewとは？
+
+HomebrewはmacOSとLinuxで使える**パッケージマネージャー**です。  
+macOSの開発者の多くはHomebrewを使っていると思います。nixを使うGeekは別ですが。
+
+Debian系の`apt`やRed Hat系の`yum`に似ていますが、更新はディストリビューションのバージョンに依存せず、ローリングリリースに対応しています。OS標準のパッケージマネージャーではありません。  
+また、Appleのエコシステムに依存せず、コミュニティが管理するformulaやcaskを通じてソフトウェアを提供します。  
+そのため、開発者に使いやすい一貫したインストール体験を提供します。
+
+## Changelog
+
+### 1. 同時ダウンロードが標準に
+
+> `HOMEBREW_DOWNLOAD_CONCURRENCY=auto` is set by default.
+
+同時ダウンロード機能は、すでに**4.6.0**で追加されていました。  
+当時は実験的な機能で、希望する利用者が環境変数で有効にする方式でした。[Homebrew/brew/pull/20342](https://github.com/Homebrew/brew/pull/20342)  
+その後、Homebrewチームが安定していると判断し、**5.0.0**で標準の動作になりました。
+
+`HOMEBREW_DOWNLOAD_CONCURRENCY`の既定値はautoです。数値を指定すると、その数だけ同時にダウンロードします。
+
+### 2. Linux ARM64/AArch64の対応がTier 1に昇格
+
+HomebrewはmacOSだけでなくLinuxにも対応しています。  
+今回、Linux ARM64/AArch64の対応レベルがTier 1に昇格しました。  
+Linuxではまだ使っていませんが、機会があれば試してみたいです。
+
+### 3. `--no-quarantine`と`--quarantine`が非推奨に
+
+macOSでは、**Apple Developerライセンス**を持たない開発者のアプリが**Gatekeeper**によりブロックされたり、追加の承認を求められたりします。Homebrewは`--no-quarantine`で、この煩わしいGatekeeperのチェックを回避できるようにしていました。
+
+ただ、Homebrewチームは気に入らなかったようです。今回非推奨になり、2026年9月にサポートが削除される予定です。
+
+![librewolf-installation.png](https://assets.akuk.in/blog/in-content/1763552162764_librewolf-installati.webp 'LibreWolfのインストール手順')
+
+[LibreWolfのインストール手順](https://librewolf.net/docs/faq/#why-is-librewolf-marked-as-broken)にも変化がありそうです。:(
+
+## 余談：並行性と並列性
+
+> 記事を書きながら自分も混乱したので、整理してみます。
+
+**並行性（Concurrency）**は複数の処理を短い間隔で切り替え、同時に動いているように見せることです。  
+**並列性（Parallelism）**は、複数の処理を物理的に同時に実行することです。
+
+実装の観点では：  
+**シングルコアCPU**では、コンテキストスイッチで処理を交互に実行し、並行性を実現します。  
+**マルチコアCPU**では、別々の処理を別々のコアに割り当て、実際に同時実行することで並列性を実現します。
+
+この概念に基づくと、今回のHomebrewの機能は次のように整理できます。
+
+複数ファイルのダウンロードでは通常、複数の要求を送信し、届いた応答を短い間隔で交互に処理する並行性を使います。その意味で、今回の機能は複数のダウンロードを同時進行させる「同時ダウンロード」です。そもそも機能名もConcurrent Downloadsですね。
+
+## おわりに
+
+MacBookを開いて更新を待つ、あの短い休憩時間は減りそうです。:/

@@ -1,0 +1,137 @@
+---
+title: 'Postgresus: PostgreSQL’s Reverse Cursed Technique'
+description: 'Postgresus is a free, open-source, self-hosted tool for automated PostgreSQL backups. Set it up with Docker Compose and configure schedules, storage, retention, and notifications.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/Postgresus_%20Postgres%EC%9D%98%20%EB%B0%98%EC%A0%84%20%EC%88%A0%EC%8B%9D.png
+publishedAt: '2025-11-24T17:05:08.530542'
+updatedAt: '2025-11-25T01:28:11.541627+00:00'
+topics: ['postgresql', 'docker']
+author: 'gymynnym'
+draft: false
+---
+
+# Postgresus: PostgreSQL’s Reverse Cursed Technique
+
+## What Is Postgresus?
+
+> **Original:** Free, open source and self-hosted solution for automated PostgreSQL backups. With multiple storage options and notifications  
+> **Translation**: A free, open-source, self-hosted solution for automated PostgreSQL backups with multiple storage options and notifications.
+
+[RostislavDugin/postgresus](https://github.com/RostislavDugin/postgresus) is an automated PostgreSQL backup tool. Its main features include:
+
+#### 1. Scheduled Backups
+
+Run backups at specified times. Balanced compression reduces storage requirements by a factor of 4–8.
+
+#### 2. Multiple Storage Destinations
+
+Use local storage or cloud storage such as S3, R2, and Google Drive. Security options are also available depending on the destination.
+
+#### 3. Smart Notifications
+
+Receive success and failure notifications through email, Telegram, Slack, Discord, and other channels.
+
+> See the [Postgresus features documentation](https://github.com/RostislavDugin/postgresus?tab=readme-ov-file#-features) for more.
+
+## Installing Postgresus
+
+An automatic installation script is available, but I am more comfortable with Docker Compose, so that is what we will use.
+
+```yml
+services:
+  my-postgres:
+    container_name: my-postgres
+    image: postgres:18
+    # more options
+  my-postgresus:
+    container_name: my-postgresus
+    image: rostislavdugin/postgresus:latest
+    ports:
+      - '4005:4005' # Port for the WebUI
+    volumes:
+      - ./postgresus/data:/postgresus-data # Backup data volume mount
+    depends_on:
+      - my-postgres # PostgreSQL dependency
+```
+
+I used PostgreSQL 18 for this installation.  
+When defining the Postgresus container, configure the WebUI **port** and mount a **volume** for backup data.
+
+## Using Postgresus
+
+### 1. Open the Postgresus WebUI
+
+Open [http://yourhost:4005/](http://yourhost:4005/) in your browser.
+
+![Sign up admin.png](https://assets.akuk.in/blog/in-content/1763969003219_Signupadmin.webp 'Sign up admin')
+
+Follow the on-screen instructions to create an admin account.
+
+> **Note**: I hope your password is not on [this list](https://en.wikipedia.org/wiki/List_of_the_most_common_passwords). :)
+
+### 2. Create a Workspace
+
+![Create workspace.png](https://assets.akuk.in/blog/in-content/1763969211014_Createworkspace.webp 'Create worksapce')
+
+After setting up the admin account, click Create workspace.
+
+> A Workspace is Postgresus’s unit for managing databases, storage, notification settings, and more.
+
+### 3. Configure Backups
+
+![Add database for backup.png](https://assets.akuk.in/blog/in-content/1763969377463_Adddatabaseforbackup.webp 'Add database for backup')
+
+Next, configure the PostgreSQL database to back up, using the container defined in Docker Compose.
+
+You will then be asked whether to create a dedicated read-only backup user. This is optional, and I will skip it here.
+
+![Add backup options.png](https://assets.akuk.in/blog/in-content/1763969560935_Addbackupoptions.webp 'Add backup options')
+
+After configuring the target database, configure the backup settings. I will use:
+
+- Every day at 4 a.m.
+- Three retries on failure.
+- One CPU for restores.
+- Retain backups for one month.
+- Local storage without encryption.
+- Notify on success and failure.
+
+### 4. Configure Notifications
+
+![Add notifier.png](https://assets.akuk.in/blog/in-content/1763969631838_Addnotifier.webp 'Add notifier')
+
+Finally, configure a Notifier. I used a Discord webhook, but Slack, Telegram, and various other providers are supported.
+
+![Discord.png](https://assets.akuk.in/blog/in-content/1763969936544_Discord.webp 'Connection test and backup notifications in Discord')
+
+![Postgres backups.png](https://assets.akuk.in/blog/in-content/1763969737239_Postgresbackups.webp 'Postgres backups')
+
+Once configured, a backup runs as shown above and appears in the backup list.  
+Delete, restore, and download actions are easy to use. Clicking `Make backup right now` also creates an immediate backup.
+
+## Results
+
+```
+$ docker stats my-postgresus
+CONTAINER ID   NAME            CPU %     MEM USAGE / LIMIT
+............   my-postgresus   0.00%     77.63MiB / ...
+```
+
+Here is CPU and memory usage while idle. Postgresus seems quite frugal.
+
+```
+├── docker-compose.yml
+└── postgresus
+    └── data
+        ├── backups
+        │   └── ...
+        ├── pgdata
+        ├── secret.key
+        └── temp
+```
+
+The backup files are present and correct, too.
+
+## Closing Thoughts
+
+Now my data is safe!  
+It looks like it is time to set up RAID or backups for the physical drives next...

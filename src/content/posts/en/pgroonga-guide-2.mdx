@@ -1,0 +1,139 @@
+---
+title: 'Basic PGroonga Usage'
+description: 'Run PostgreSQL with the official PGroonga Docker image, enable the extension, create indexes, and use full-text queries and array indexes for searches across multiple columns.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/PGroonga%20%EA%B0%80%EC%9D%B4%EB%93%9C.png
+publishedAt: '2025-12-02T00:23:20.373414'
+updatedAt: '2025-12-04T00:19:32.509813'
+topics: ['postgresql', 'docker']
+series: 'pgroonga-guide'
+seriesOrder: 2
+author: 'gymynnym'
+draft: false
+---
+
+# Basic PGroonga Usage
+
+## Installing PGroonga
+
+**PGroonga** is a PostgreSQL extension, so it must be installed in an environment that already has PostgreSQL.
+
+The [installation process](https://pgroonga.github.io/install/) varies by operating system and PostgreSQL version and can be complex. Instead of covering it here, we will use the [official Docker image](https://github.com/pgroonga/docker).
+
+Here is a `docker-compose.yml` that runs a PostgreSQL image containing PGroonga.
+
+```yaml
+services:
+  my-pgroonga:
+    container_name: my-pgroonga
+    image: groonga/pgroonga:4.0.4-alpine-18
+    shm_size: 128mb
+    env_file: .env.postgres
+```
+
+Put PostgreSQL settings, including the username and password, in `.env.postgres`.
+
+```
+$ docker compose up -d
+$ docker exec -it my-pgroonga psql -U <username>
+```
+
+Start PostgreSQL and connect with the commands above. You can also connect using another method.
+
+```sql
+CREATE EXTENSION pgroonga;
+```
+
+Enable the PGroonga extension with the query above.
+
+## Basic PGroonga Usage
+
+### 1. Create an Example Table
+
+```sql
+CREATE TABLE articles (
+    id SERIAL PRIMARY KEY,
+    title TEXT,
+    content TEXT
+);
+```
+
+The `articles` table contains `id` (primary key), `title`, and `content` columns.
+
+### 2. Create PGroonga Indexes
+
+PGroonga integrates Groonga into its index engine. To use Groonga for search, create PGroonga indexes.
+
+```sql
+CREATE INDEX articles_title_pgroonga_idx
+ON public.articles USING pgroonga (title)
+WITH (tokenizer='TokenBigram');
+
+CREATE INDEX articles_content_pgroonga_idx
+ON public.articles USING pgroonga (content)
+WITH (tokenizer='TokenBigram');
+```
+
+- `articles_title_pgroonga_idx` creates an index on the **single column** `title`.
+- `articles_content_pgroonga_idx` creates an index on the **single column** `content`.
+
+We use `TokenBigram`, the most suitable tokenizer for Korean among the default tokenizers.
+
+> You can also use `Mecab-ko`. We will cover it in detail in a later chapter.
+
+```sql
+SELECT jsonb_pretty(pgroonga_command('tokenize TokenBigram "이것은 첫 번째 기사입니다."')::jsonb);
+```
+
+The command above lets you inspect the tokenization result.
+
+### 3. Insert Example Data
+
+```sql
+INSERT INTO articles (title, content) VALUES
+('첫 번째 기사', '이것은 첫 번째 기사입니다.'),
+('두 번째 기사', '이것은 두 번째 기사입니다.'),
+('세 번째 기사', '이것은 세 번째 기사입니다.');
+```
+
+### 4. PGroonga FTS : `&@~`
+
+```sql
+SELECT * FROM articles
+WHERE title &@~ '첫 번째' OR content &@~ '첫 번째';
+--  id |    title     |          content
+-- ----+--------------+----------------------------
+--   1 | 첫 번째 기사 | 이것은 첫 번째 기사입니다.
+```
+
+The `&@~` operator performs PGroonga full-text search.
+
+Specify the target column on the left and the search keyword on the right. Keywords can also use [Groonga’s query syntax](https://groonga.org/docs/reference/grn_expr/query_syntax.html).
+
+Frequently used Groonga query operators include:
+
+- `KEYWORD1 AND KEYWORD2`: AND operator.
+- `KEYWORD1 OR KEYWORD2`: OR operator.
+- `KEYWORD1 -KEYWORD2`: keyword exclusion operator.
+
+### 5. Searching Multiple Columns
+
+At this point, you may have noticed a potential problem.
+
+> What happens if the `articles` table gains more searchable columns?
+
+You are right: writing an `OR` condition for every column is cumbersome and requires multiple indexes, which also hurts performance.
+
+Fortunately, PGroonga supports indexes on `text[]`. You can group the searchable columns into an array and manage them with one index.
+
+```sql
+CREATE INDEX articles_pgroonga_idx
+ON public.articles USING pgroonga ((ARRAY [title, content]))
+WITH (tokenizer='TokenBigram');
+
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@~ '첫 번째';
+```
+
+The queries above group `title` and `content` into an array to create a single PGroonga index, then search that array with PGroonga.
+
+Now you can search with one index and one query, even as the number of searchable columns grows!

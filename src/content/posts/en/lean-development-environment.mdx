@@ -1,0 +1,78 @@
+---
+title: 'Slimming Down My Local Development Environment'
+description: 'How I reduced resource usage in my local development environment by moving Docker to a home server, securing access with WireGuard, and adopting terminal tools such as Neovim.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/%EB%A1%9C%EC%BB%AC%20%EA%B0%9C%EB%B0%9C%20%ED%99%98%EA%B2%BD%EC%9D%98%20%EB%8B%A4%EC%9D%B4%EC%96%B4%ED%8A%B8.png
+publishedAt: '2026-01-01T22:10:38.193346'
+updatedAt: '2026-01-15T22:36:43.069732+00:00'
+topics: ['wireguard', 'ubuntu', 'docker']
+author: 'gymynnym'
+draft: false
+---
+
+# Slimming Down My Local Development Environment
+
+Until recently, my local development environment had the following specifications. I will simply call it my development environment from here on.
+
+![macbook.webp](https://assets.akuk.in/blog/in-content/1767261328444_macbook.webp 'Apple Silicon M1 / 16GB RAM / 256GB Disk Volume')
+
+Over about five years of development, I accumulated more tools, updates made existing tools heavier, and full-stack applications required several servers running at once. The environment that suited me five years earlier had become **starved of resources**. I started slimming it down and kept it **quite usable** until the device died from water damage.
+
+This article briefly describes the process I went through.
+
+## Adopting Docker: macOS Cannot Run Docker Natively
+
+I often use **Docker** to set up development environments. Before discovering it, I installed databases, search and monitoring engines, and runtimes directly on the OS or created VMs, like a scientist with endless spare time.
+
+After adopting **Docker**, switching projects and setting up their requirements became dramatically faster. I thought the happiness would last.
+
+> macOS cannot run Docker natively.
+
+Reality was less kind. Docker runs natively only on Linux, and Docker Desktop uses a VM internally. That meant constant resource consumption and reduced performance. I could not give up **Docker**, so I built a home server.
+
+> [apple/container](https://github.com/apple/container) exists, but I am still more comfortable with Docker. :|
+
+## Building a Home Server: Moving Away from Local
+
+> If Docker runs natively only on Linux, I want to build a Linux environment myself.
+
+With that in mind, I considered moving to a Linux desktop, but I often needed a laptop. I dual-booted Arch Linux and Windows on a desktop for several months, but ran into Secure Boot issues and awkward switching between English, Korean, and Japanese IMEs.
+
+Instead, I gathered spare computer parts, installed Ubuntu Minimal, and put Docker on the resulting home server. I could remove Docker entirely from my local environment and delegate all container resource usage to the server.
+
+> Since the home server has no GUI, I often manage Docker with **[lazydocker](https://github.com/jesseduffield/lazydocker)**.
+
+![Lazydocker Demo](https://github.com/jesseduffield/lazydocker/raw/master/docs/resources/demo3.gif 'Lazydocker Demo')
+
+## Aside: Signs of Intrusion and Hiding the Home Server
+
+To access the server from outside, I had exposed an `ssh` port and enabled password authentication. I foolishly thought changing the listening port from 22 would be enough. The logs proved otherwise: countless port scans and SSH attempts from strangers were enough to motivate me to study networking. I closed all ports, restricted resources to the internal network, installed WireGuard, and exposed only the VPN port.
+
+> WireGuard is normally “silent,” making it difficult for port scanners to detect. [Reading the WireGuard Whitepaper](/en/posts/wireguard-whitepaper-5).
+
+## Adopting AeroSpace: Another Heavy Tool
+
+> **[AeroSpace](https://github.com/nikitabobko/AeroSpace)** is a **tiling window manager (TWM)** for macOS.
+
+![aerospace_demo.png](https://assets.akuk.in/blog/in-content/1767270851976_aerospace_demo.webp 'An AeroSpace tiling example')
+
+After trying Hyprland and i3, I became hooked on TWMs, so adopting AeroSpace on macOS was a major change. At first it ran on a single thread and had performance issues (now resolved), and compatibility with JetBrains IDEs was poor.
+
+It worked quite well for browsing and terminal use, though, so I gradually moved my development workflow into the terminal.
+
+## Moving to the Terminal
+
+The first tool I learned was **Neovim** for writing code. I already used Vim plugins and keymaps in IDEs, so I expected an easy transition. But buffers instead of tabs and missing IDE features made the default setup unacceptable. Installing [LazyVim](https://www.lazyvim.org/) gave me a comfortable coding environment with only a little customization.
+
+I also started using CLI/TUI tools such as `lazydocker`, `gitui`, `lsd`, `television`, and `zoxide`.
+
+Some tasks remained difficult to move into the terminal. **IntelliJ** was far more convenient for Java/Kotlin + Spring projects, and CLI/TUI database clients were hard to get used to. I tried lighter tools such as VSCode and Zed and ultimately settled on switching tools to suit each situation.
+
+> **AeroSpace** performance has improved greatly, and JetBrains IDEs now work comfortably. [Details](https://github.com/nikitabobko/AeroSpace/issues/131).
+
+## Results
+
+Build speed for the Spring project I was working on improved by **43%**, and moving to terminal tools resolved the occasional freezes I had experienced.
+
+Moving Docker to an external server also had an unexpected benefit: I could continue working seamlessly from other development environments.
+
+My favorite outcomes are having a cute little home server and earning the title of **Vimmer**. :)

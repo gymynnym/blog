@@ -1,0 +1,78 @@
+---
+title: 'ローカル開発環境のダイエット'
+description: 'Dockerをホームサーバーに移し、WireGuardでアクセスを保護し、Neovimなどのターミナルツールを取り入れて、ローカル開発環境のリソース消費を減らした記録です。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/%EB%A1%9C%EC%BB%AC%20%EA%B0%9C%EB%B0%9C%20%ED%99%98%EA%B2%BD%EC%9D%98%20%EB%8B%A4%EC%9D%B4%EC%96%B4%ED%8A%B8.png
+publishedAt: '2026-01-01T22:10:38.193346'
+updatedAt: '2026-01-15T22:36:43.069732+00:00'
+topics: ['wireguard', 'ubuntu', 'docker']
+author: 'gymynnym'
+draft: false
+---
+
+# ローカル開発環境のダイエット
+
+少し前まで、次のスペックのローカル開発環境を使っていました。以降は開発環境と略します。
+
+![macbook.webp](https://assets.akuk.in/blog/in-content/1767261328444_macbook.webp 'Apple Silicon M1 / 16GB RAM / 256GB Disk Volume')
+
+約5年の開発で使うツールが増え、既存のツールも更新で重くなり、フルスタック開発には複数のサーバーを同時に動かす必要がありました。5年前にはちょうどよかった環境も、いつの間にか**リソース不足**になりました。そこで開発環境のダイエットを始め、水没で端末が壊れるまでは**かなり使える状態**を保てました。
+
+この記事では、実際に行った開発環境のダイエットを簡単に紹介します。
+
+## Dockerの導入：macOSではDockerをネイティブに動かせない
+
+開発環境の準備には**Docker**をよく使います。出会う前は、DBや検索・監視エンジン、ランタイムをOSに直接インストールしたりVMを作ったりと、時間に余裕のある科学者のように設定していました。
+
+**Docker**を導入すると、プロジェクトを切り替える際の環境準備が劇的に短くなり、このまま快適に使えると思っていました。
+
+> macOSではDockerをネイティブに動かせません。
+
+現実は厳しいものでした。Dockerがネイティブに動くのはLinuxだけで、管理に使っていたDocker Desktopは内部でVMを使います。常にリソースを消費し、開発環境の性能を下げていました。**Docker**は手放せなかったため、ホームサーバーを作ることにしました。
+
+> [apple/container](https://github.com/apple/container)もありますが、まだDockerのほうに慣れています。:|
+
+## ホームサーバーの構築：ローカルから離れる
+
+> DockerがLinuxでしかネイティブに動かないなら、自分でLinux環境を作りたい。
+
+そう考えてLinuxデスクトップへの移行を試しましたが、ラップトップが必要な場面も多くありました。デスクトップでArch LinuxとWindowsを数か月デュアルブートしたものの、Secure Bootで何度か問題が起き、英語・韓国語・日本語のIME切り替えも滑らかではありませんでした。
+
+そこで家に余っていた部品を集め、Ubuntu MinimalとDockerを入れたホームサーバーを作りました。ローカルからDockerを完全に削除し、コンテナーが必要とするリソースをすべてサーバーに任せられるようになりました。
+
+> ホームサーバーにはGUIがないため、Dockerの管理には**[lazydocker](https://github.com/jesseduffield/lazydocker)**をよく使います。
+
+![Lazydocker Demo](https://github.com/jesseduffield/lazydocker/raw/master/docs/resources/demo3.gif 'Lazydocker Demo')
+
+## 補足：侵入の痕跡とホームサーバーを外部から隠す必要性
+
+外から接続するため、当時は`ssh`ポートを公開し、パスワード認証も許可していました。22番以外に変えれば十分だという無茶な考えでしたが、ログを見て目を疑いました。大量のポートスキャンと見知らぬ相手からのSSH接続試行を見て、ネットワークを学び始めました。その後すべてのポートを閉じ、内部ネットワークからだけリソースにアクセスする方針に変え、WireGuardを導入してVPN用のポートだけを公開しました。
+
+> WireGuardは通常「沈黙」しているため、ポートスキャナーで検出しにくくなります。[WireGuard白書をやさしく読む](/ja/posts/wireguard-whitepaper-5)。
+
+## AeroSpaceの導入：重いツールが端末に加わる
+
+> **[AeroSpace](https://github.com/nikitabobko/AeroSpace)**は、macOSで使える**タイル型ウィンドウマネージャー（TWM）**です。
+
+![aerospace_demo.png](https://assets.akuk.in/blog/in-content/1767270851976_aerospace_demo.webp 'AeroSpaceのタイル配置例')
+
+Hyprlandとi3を試してTWMに夢中になり、macOSでもAeroSpaceを導入したことは大きな変化でした。最初はシングルスレッドで動き、性能に問題がありました（現在は解決済み）。JetBrains IDEとの相性もよくありませんでした。
+
+それでもブラウジングやターミナルでは十分使えたため、開発環境を少しずつターミナルへ移し始めました。
+
+## ターミナル環境への移行
+
+まず慣れたのは、コードを書くための**Neovim**でした。IDEでもVimプラグインやキーマップを使っていたので簡単だと思いましたが、タブではなくバッファを扱うことや、IDEで当然だった機能がないことから、そのままでは満足できませんでした。[LazyVim](https://www.lazyvim.org/)を入れることで、少しのカスタマイズで快適な環境を作れました。
+
+ほかにも、先ほどの`lazydocker`や`gitui`、`lsd`、`television`、`zoxide`など、多くのCLI/TUIツールを使い始めました。
+
+ターミナルへ移しにくい作業もありました。Java/KotlinとSpringのプロジェクトでは**IntelliJ**が機能面で圧倒的に便利で、CLI/TUIのDBクライアントにも慣れませんでした。VSCodeやZedなど軽いツールも試し、最終的には状況に応じて使い分けるようになりました。
+
+> 現在の**AeroSpace**は性能が大きく改善し、JetBrains IDEも快適に使えます。[詳細](https://github.com/nikitabobko/AeroSpace/issues/131)。
+
+## 結果
+
+当時のSpringプロジェクトのビルド速度が**43%**向上し、ターミナル環境への移行で、ときどき発生していたフリーズも解消しました。
+
+Dockerを外部サーバーに分離したことで、別の開発環境からも継続して作業できるという意外な利点がありました。
+
+個人的に一番うれしいのは、かわいいホームサーバーができたことと、**Vimmer**の称号です。:)

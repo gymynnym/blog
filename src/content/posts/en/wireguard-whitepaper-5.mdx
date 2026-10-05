@@ -1,0 +1,98 @@
+---
+title: 'Protocol and Cryptography'
+description: 'An overview of WireGuard’s initiator and responder, silent behavior, 1-RTT handshake, cookie system, message fields, and optional pre-shared symmetric key mode.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-17T20:55:58.787879'
+updatedAt: '2025-12-17T20:55:58.840140'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 5
+author: 'gymynnym'
+draft: false
+---
+
+# Protocol and Cryptography
+
+> In this article, the **initiator** is the peer attempting to connect, and the **responder** is the peer receiving that request.
+
+## Silence Is a Virtue
+
+One of WireGuard’s main design principles is **never responding to or storing unauthenticated packets**. This makes network scanning harder and prevents unauthenticated packets from consuming memory.
+
+> A WireGuard server responds only to peers that know the **responder’s public key**. This is the core of its stealth behavior.
+
+## Handshake
+
+Before sending encrypted packets, peers must exchange encryption keys. WireGuard does this with a **1-RTT handshake**.
+
+> **1-RTT handshake**: an efficient handshake requiring just one round trip, from request to response.
+
+## Cookie System
+
+Validating encrypted packets requires CPU work. An attacker sending many junk packets at once could overload a WireGuard server.
+
+WireGuard uses a **cookie system** to prevent this:
+
+1. **Normally**: perform the computation immediately.
+2. **Under load**:
+   - The responder returns a **cookie** instead of doing the computation.
+     - The server stores no state at this point.
+   - The initiator sends the request again, including the cookie.
+     - Only then does the server process it normally.
+
+This makes DoS attacks easier to defend against. Cookies are also encrypted in transit to prevent man-in-the-middle attacks.
+
+> Returning a cookie breaks the responder’s **silence**, but it remains **silent** under normal conditions.
+
+## Messages
+
+WireGuard has the following message types:
+
+1. Handshake initiation (1-RTT).
+2. Handshake response (1-RTT).
+3. Cookie reply (when the server is under load).
+4. Encapsulated, encrypted IP packets using the secure session established by the handshake.
+
+### Protocol Overview
+
+In most cases (1-RTT):
+
+1. Initiator -> responder: handshake initiation (“Let’s connect”).
+2. Responder -> initiator: handshake response (“Agreed”).
+3. Afterwards: data transfer.
+
+If one of the peers is under load:
+
+1. Initiator -> responder: handshake initiation (“Let’s connect”).
+2. Responder -> initiator: cookie reply (“Come back with this”).
+3. Initiator -> responder: handshake initiation (“Let’s connect,” with the cookie).
+4. Responder -> initiator: handshake response (“Agreed”).
+5. Afterwards: data transfer.
+
+### First Message: Initiator -> Responder
+
+The initiator sends a message containing:
+
+- `sender`: initiator identifier, used when receiving a response.
+- `ephemeral`: a temporary public key used only for this connection.
+- `static`: static public key.
+- `timestamp`: current time, used to defend against replay attacks.
+- `mac1`: first check, using the responder’s public key and message contents.
+- `mac2`: second check for cookie authentication; normally left as zero.
+
+### Second Message: Responder -> Initiator
+
+- `sender`: responder identifier.
+- `receiver`: the initiator identifier received earlier.
+- `ephemeral`: a temporary public key used only for this connection.
+- `empty`: encrypted empty data for confirming authentication.
+- `mac1`, `mac2`: as above.
+
+> `mac1` is a hash of the message using the **other peer’s public key**.  
+> `mac2` is used only when the server is under load and has returned a **cookie**; it hashes the message using that cookie.
+
+## Bonus: Optional Pre-shared Symmetric Key Mode
+
+WireGuard normally uses elliptic-curve cryptography through **Curve25519**. Although secure, it also supports a **pre-shared key (PSK) mode** as a precaution against future **quantum computing**.
+
+This adds a **previously agreed symmetric key** on top of the existing cryptography. Even if a quantum computer defeats **Curve25519**, it cannot decrypt the packets without knowing this symmetric key.

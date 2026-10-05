@@ -1,0 +1,535 @@
+---
+title: 'Passkeyでログイン：自分の秘密は自分で管理する with Go'
+description: 'PasskeyとWebAuthnの公開鍵認証を理解し、Go、Gin、ブラウザーのWebAuthn APIで登録とログインを実装します。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/Passkey%EB%A1%9C%20%EB%A1%9C%EA%B7%B8%EC%9D%B8_%20%EB%82%B4%20%EB%B9%84%EB%B0%80%EC%9D%80%20%EB%82%B4%EA%B0%80%20%EA%B4%80%EB%A6%AC%ED%95%98%EA%B8%B0.png
+publishedAt: '2026-01-09T00:04:19.075127'
+updatedAt: '2026-01-09T14:36:33.237996+00:00'
+topics: ['go']
+author: 'gymynnym'
+draft: false
+---
+
+# Passkeyでログイン：自分の秘密は自分で管理する with Go
+
+## はじめに
+
+![apple_passkey_login.jpg](https://assets.akuk.in/blog/in-content/1767882560183_apple_passkey_login.webp 'https://developer.apple.com/passkeysから引用')
+
+最近、**Passkeyでログイン**を見ると笑顔ですぐに押すことが増えました。より安全で簡単だからです。このボタンの意味を説明します。
+
+## WebAuthn（Web Authentication）の概要
+
+> [W3C](https://en.wikipedia.org/wiki/World_Wide_Web_Consortium)はWorld Wide Webの国際標準化団体です。
+
+> [FIDO2](https://en.wikipedia.org/wiki/FIDO_Alliance#FIDO2)は、強力なWeb認証を目指すFIDO AllianceとW3Cの共同プロジェクトです。
+
+**WebAuthn**はW3Cの標準で、FIDO2の主要な要素です。開発者なら`ssh`の**公開鍵認証**に似ていると考えてよいでしょう。パスワードの代わりに公開鍵・秘密鍵のペアを使い、秘密をサーバーへ送りません。
+
+WebAuthnには三つの要素があります。
+
+1. **Webサイト**：準拠した信頼当事者（Relying Party）。
+2. **ブラウザー**：準拠したクライアント。
+3. **認証器**：クライアントと互換性のあるFIDO2認証器。
+
+WebAuthnは、資格情報で利用者を認証するAPIと、認証器の動作を定義します。
+
+> 「Passkeyの説明なのになぜWebAuthn？」と思ったら、二つ先の節で説明するので、先に読んでも構いません。
+
+### WebAuthn認証器
+
+WebAuthn認証器は信頼できる**認証情報の管理器**です。秘密鍵を安全に保存し、サーバーのチャレンジに署名します。次の種類があります。
+
+1. **プラットフォーム認証器**：端末に内蔵され、主に生体認証を求めます。
+   - ハードウェアTPMを使用。
+2. **ローミング認証器**：端末に依存せず移動可能。クロスプラットフォーム認証器とも呼ばれます。
+   - YubiKey、スマートフォンの認証通知（CaBLE）など。
+3. **ソフトウェア認証器**：暗号化クラウドに同期するアプリや拡張機能。
+   - 同期により、機器の紛失や破損後も秘密鍵を復元できます。
+   - マスターパスワードが漏れると、すべての秘密が盗まれる可能性があります。
+   - Bitwarden、Appleのパスワードなど。
+
+> **TPM（Trusted Platform Module）**はセキュリティ用チップで、通常のソフトウェア攻撃では内部情報を盗みにくいよう設計されています。
+
+### Passkey
+
+Passkeyは、**認証器が管理するWebAuthn資格情報**の非技術的な呼び名です。GoogleやGitHubなどは認証画面でこの呼び名を使います。
+
+> 一般の利用者には「WebAuthn資格情報でログイン」は技術的すぎて、押したくなくなりそうです。
+
+## WebAuthnの動作フロー
+
+主に**登録**と**認証**に分かれ、通常の登録・ログインに似ています。ただし、サーバーは秘密鍵やパスワードを知りません。鍵は次のように使います。
+
+- **秘密鍵**：クライアントが署名に使用。
+- **公開鍵**：サーバーが検証に使用。
+
+### 登録（Registration）
+
+1. **登録要求**（クライアント -> サーバー）。
+   - 利用者が「Passkeyを登録」をクリックします。
+2. **チャレンジとオプションの生成**（サーバー -> クライアント）。
+   - 次を含むオプションを作ります。
+     - `challenge`：署名・検証用のランダムデータ。
+     - `rp`：信頼当事者の情報。`id`で有効なドメイン範囲を指定。
+     - `user`：登録する利用者の情報。
+     - `pubKeyCredParams`：推奨暗号アルゴリズム。
+   - ブラウザーへ送ります。
+3. **認証器の呼び出し**（クライアント -> 認証器）。
+   - `navigator.credentials.create()`を呼びます。
+   - 認証器へオプションを渡します。
+4. **本人確認と鍵生成**（認証器）。
+   - PINや指紋、Face IDなどで本人確認します。
+   - このWebサイト専用の鍵ペアを作ります。
+   - 秘密鍵を安全に保存し、検索用のCredential IDを作ります。
+5. **署名と送信**（認証器 -> クライアント -> サーバー）。
+   - 生成した秘密鍵でチャレンジに署名します。
+   - 公開鍵、署名、アルゴリズム、Credential IDをブラウザーへ送ります。
+   - ブラウザーがサーバーへ転送します。
+6. **検証と保存**（サーバー）。
+   - 公開鍵で署名を検証します。
+   - 成功したらDBへ保存します。
+     - ユーザーID：Credential ID、公開鍵、アルゴリズム。
+
+### 認証（Authentication）
+
+1. **ログイン要求**（クライアント -> サーバー）。
+   - 「Passkeyでログイン」をクリックします。
+2. **チャレンジ生成**（サーバー -> クライアント）。
+   - ランダムなチャレンジを作ります。
+   - 保存済みCredential ID一覧とともにブラウザーへ送ります。
+3. **認証器の呼び出し**（クライアント -> 認証器）。
+   - `navigator.credentials.get()`を呼びます。
+   - 認証器へデータを渡します。
+4. **本人確認と署名**（認証器）。
+   - Credential IDに対応する秘密鍵を確認します。
+   - PINや指紋、Face IDなどで本人確認します。
+   - 保存した秘密鍵でチャレンジに署名します。
+5. **署名の送信**（認証器 -> クライアント -> サーバー）。
+   - ブラウザー経由でサーバーへ送ります。
+6. **検証と完了**（サーバー）。
+   - 保存済み公開鍵とアルゴリズムで検証します。
+   - 成功したらログインします。
+
+## GoでWebAuthn認証を実装する
+
+GoとGinで実装します。**動作フロー**の手順はコードコメントにも登場します！
+
+> 全コードは[gymynnym/learn-webauthn](https://github.com/gymynnym/learn-webauthn)で確認できます。
+
+```sh
+$ mkdir learn-webauthn && cd learn-webauthn/
+$ go mod init learn-webauthn
+$ go get -u github.com/gin-gonic/gin
+$ go get -u github.com/go-webauthn/webauthn/webauthn
+```
+
+### GinとWebAuthnの初期化
+
+```go
+// model.go
+package main
+
+type RegistrationCache struct {
+	SessionData webauthn.SessionData
+	PendingUser *User
+}
+```
+
+`RegistrationCache`は登録用の一時保存構造です。
+
+- `SessionData`：登録時の検証用。
+- `PendingUser`：検証成功後に保存する利用者。
+
+```go
+// main.go
+package main
+
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/go-webauthn/webauthn/webauthn"
+)
+
+const ( // Ginサーバーの設定
+	HOSTNAME = "localhost"
+	PORT     = ":8080"
+)
+
+var (
+	userDB                  = map[string]*User{}                 // in-memory DB (username -> User)
+	registerationCacheStore = map[string]*RegistrationCache{}    // 登録用インメモリ一時保存先（username -> RegistrationCache）
+	loginSessionStore       = map[string]*webauthn.SessionData{} // ログイン用インメモリ一時保存先（username -> SessionData）
+	webAuthn                *webauthn.WebAuthn
+)
+
+func initWebAuthn() { // WebAuthnオブジェクトの初期化
+	var err error
+	webAuthn, err = webauthn.New(&webauthn.Config{
+		// Relying Partyの設定
+		RPDisplayName: "Example App",
+		RPID:          HOSTNAME,
+		RPOrigins:     []string{"http://" + HOSTNAME + PORT},
+	})
+	if err != nil {
+		panic("Failed to initialize WebAuthn: " + err.Error())
+	}
+}
+
+func main() {
+	initWebAuthn()
+
+	r := gin.Default()
+	if err := r.Run(PORT); err != nil {
+		panic("Failed to start server: " + err.Error())
+	}
+}
+```
+
+- `userDB`：利用者用インメモリDB。
+- `registrationCacheStore`：登録用一時保存先。
+- `loginSessionStore`：認証用一時保存先。
+- `webAuthn`：WebAuthnオブジェクト。
+- `main.r`：ルーターとなるGinオブジェクト。
+
+### Userモデルの定義
+
+モデルをWebAuthnで使うには`webauthn.User`を実装します。
+
+```go
+// webauthn/types.go
+type User interface {
+	WebAuthnID() []byte                // 利用者の一意の識別子（最大64バイト）
+	WebAuthnName() string              // 利用者のアカウント名
+	WebAuthnDisplayName() string       // 利用者の表示名（人間向け）
+	WebAuthnCredentials() []Credential // 資格情報の一覧
+}
+```
+
+`WebAuthnID`には通常DBのユーザーIDを使います。整数やUUIDなど、さまざまなIDに対応するためバイト表現を使います。
+
+```go
+// model.go
+package main
+
+import (
+	"encoding/binary"
+
+	"github.com/go-webauthn/webauthn/webauthn"
+)
+
+type User struct {
+	ID          uint64
+	Name        string
+	Credentials webauthn.Credentials
+}
+
+func (u *User) WebAuthnID() []byte {
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, u.ID)
+	return b
+}
+func (u *User) WebAuthnName() string                       { return u.Name }
+func (u *User) WebAuthnDisplayName() string                { return u.Name }
+func (u *User) WebAuthnCredentials() []webauthn.Credential { return u.Credentials }
+```
+
+### 登録の実装
+
+```go
+func beginRegistration(c *gin.Context) {
+	username := c.Param("username")
+
+	// 利用者の存在を確認
+	if _, exists := userDB[username]; exists {
+		c.JSON(409, gin.H{"error": "User already exists"})
+		return
+	}
+
+	// 利用者オブジェクトを作成
+	user := User{
+		ID:   uint64(len(userDB) + 1),
+		Name: username,
+	}
+
+	// 登録#2：チャレンジとオプションを生成
+	options, sessionData, err := webAuthn.BeginRegistration(&user)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to begin registration"})
+		return
+	}
+
+	// セッションデータと利用者情報を一時保存
+	registerationCacheStore[username] = &RegistrationCache{
+		SessionData: *sessionData,
+		PendingUser: &user,
+	}
+	c.JSON(200, options)
+}
+
+func finishRegistration(c *gin.Context) {
+	username := c.Param("username")
+
+	// セッションデータと利用者情報を取得
+	cache, exists := registerationCacheStore[username]
+	if !exists {
+		c.JSON(400, gin.H{"error": "No session data found"})
+		return
+	}
+
+	// 登録#6：検証
+	credential, err := webAuthn.FinishRegistration(cache.PendingUser, cache.SessionData, c.Request)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "Failed to finish registration"})
+		return
+	}
+
+	// 登録#6：保存
+	user := cache.PendingUser
+	user.Credentials = append(user.Credentials, *credential) // 新しい資格情報を追加
+	userDB[username] = user                                  // 利用者DBへ保存
+	delete(registerationCacheStore, username)                // 一時保存先を片付ける
+
+	c.JSON(200, gin.H{"status": "Registration successful"})
+}
+```
+
+```go
+func main() {
+	// ...
+	r.GET("/register/begin/:username", beginRegistration)
+	r.POST("/register/finish/:username", finishRegistration)
+	// ...
+}
+```
+
+`GET /register/begin/:username`は登録開始APIです。
+
+1. `username`がDBに存在するか確認します。
+2. なければ`User`を作ります。
+3. チャレンジとオプションを作って返します。
+   - `SessionData`と`User`を一時保存します。
+
+`POST /register/finish/:username`は登録完了APIです。
+
+1. `username`のキャッシュを確認します。
+2. あればクライアントの署名を検証します。
+3. 成功したらキャッシュの`User`と資格情報をDBへ保存します。
+4. 一時保存先を片付けて完了します。
+
+### 認証の実装
+
+```go
+func beginLogin(c *gin.Context) {
+	username := c.Param("username")
+
+	// 利用者を取得し、存在を確認
+	user, exists := userDB[username]
+	if !exists {
+		c.JSON(404, gin.H{"error": "User not found"})
+		return
+	}
+
+	// 認証#2：チャレンジを生成
+	options, sessionData, err := webAuthn.BeginLogin(user)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to begin login"})
+		return
+	}
+
+	loginSessionStore[username] = sessionData
+	c.JSON(200, options)
+}
+
+func finishLogin(c *gin.Context) {
+	username := c.Param("username")
+
+	// 利用者を取得し、存在を確認
+	user, exists := userDB[username]
+	if !exists {
+		c.JSON(404, gin.H{"error": "User not found"})
+		return
+	}
+
+	// 一時保存先からセッションデータを取得
+	sessionData, exists := loginSessionStore[username]
+	if !exists {
+		c.JSON(400, gin.H{"error": "No session data found"})
+		return
+	}
+
+	// 認証#6：検証
+	credential, err := webAuthn.FinishLogin(user, *sessionData, c.Request)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "Failed to finish login"})
+		return
+	}
+	_ = credential // TODO: 資格情報でセッションやトークンを発行
+
+	delete(loginSessionStore, username) // 一時保存先を片付ける
+
+	c.JSON(200, gin.H{"status": "Login successful"})
+}
+```
+
+```go
+func main() {
+	// ...
+	r.GET("/login/begin/:username", beginLogin)
+	r.POST("/login/finish/:username", finishLogin)
+	// ...
+}
+```
+
+`GET /login/begin/:username`は認証開始APIです。
+
+1. `username`がDBにあるか確認します。
+2. あればチャレンジを作って返します。
+   - ログイン用の一時保存先に`SessionData`を保存します。
+
+`POST /login/finish/:username`は認証完了APIです。
+
+1. `username`がDBにあるか確認します。
+2. `SessionData`を取得します。
+3. あれば検証します。
+4. 成功したらセッションやトークンを発行します。
+5. 一時保存先を片付けて完了します。
+
+### クライアントの実装
+
+```html
+<div>
+  <h1>Passkey Demo (Go + Gin)</h1>
+</div>
+<div>
+  <label>Username: <input type="text" id="username" value="foo" /></label>
+  <br />
+  <button onclick="register()">Passkeyを登録</button>
+  <button onclick="login()">Passkeyでログイン</button>
+</div>
+<div id="logs" />
+```
+
+```js
+// ログ用ユーティリティ
+const logEl = document.getElementById('logs');
+function log(msg) {
+  logEl.innerText = `${logEl.innerText}\n${msg}`;
+}
+
+// URL安全なBase64のエンコード・デコード
+function bufferDecode(value) {
+  return Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+}
+function bufferEncode(value) {
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(value)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
+async function register() {
+  const username = document.getElementById('username').value;
+
+  try {
+    // 登録#1：登録要求
+    const beginRes = await fetch(`/register/begin/${username}`);
+    const options = await beginRes.json();
+
+    // 登録#3：認証器の呼び出し
+    log('[Register] call authenticator');
+    options.publicKey.challenge = bufferDecode(options.publicKey.challenge);
+    options.publicKey.user.id = bufferDecode(options.publicKey.user.id);
+    const credential = await navigator.credentials.create({ publicKey: options.publicKey });
+
+    // 登録#5：署名結果の送信
+    const credentialJSON = {
+      id: credential.id,
+      rawId: bufferEncode(credential.rawId),
+      type: credential.type,
+      response: {
+        attestationObject: bufferEncode(credential.response.attestationObject),
+        clientDataJSON: bufferEncode(credential.response.clientDataJSON),
+      },
+    };
+    const finishRes = await fetch(`/register/finish/${username}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentialJSON),
+    });
+
+    const finishJSON = await finishRes.json();
+    log('[Register] finished: ' + JSON.stringify(finishJSON));
+  } catch (e) {
+    log('Error: ' + e);
+    console.error(e);
+  }
+}
+
+async function login() {
+  const username = document.getElementById('username').value;
+  try {
+    // 認証#1：ログイン要求
+    const beginRes = await fetch(`/login/begin/${username}`);
+    const options = await beginRes.json();
+
+    // 認証#3：認証器の呼び出し
+    log('[Login] call authenticator');
+    options.publicKey.challenge = bufferDecode(options.publicKey.challenge);
+    options.publicKey.allowCredentials.forEach((c) => {
+      c.id = bufferDecode(c.id);
+    });
+    const assertion = await navigator.credentials.get({ publicKey: options.publicKey });
+
+    // 認証#5：署名結果の送信
+    const assertionJSON = {
+      id: assertion.id,
+      rawId: bufferEncode(assertion.rawId),
+      type: assertion.type,
+      response: {
+        authenticatorData: bufferEncode(assertion.response.authenticatorData),
+        clientDataJSON: bufferEncode(assertion.response.clientDataJSON),
+        signature: bufferEncode(assertion.response.signature),
+        userHandle: assertion.response.userHandle ? bufferEncode(assertion.response.userHandle) : null,
+      },
+    };
+    const finishRes = await fetch(`/login/finish/${username}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(assertionJSON),
+    });
+
+    const finishJSON = await finishRes.json();
+    log('[Login] finished: ' + JSON.stringify(finishJSON));
+  } catch (e) {
+    log('Error: ' + e);
+    console.error(e);
+  }
+}
+```
+
+`register`は「Passkeyを登録」で実行します。
+
+1. `input#username`を取得します。
+2. 登録開始を要求し、`PublicKeyCredentialCreationOptions`を受信します。
+3. デコードして認証器を呼びます。
+4. 認証器で署名します。
+5. 結果をエンコードし、登録完了要求とともに送ります。
+6. 完了応答をログに出します。
+
+`login`は「Passkeyでログイン」で実行します。
+
+1. `input#username`を取得します。
+2. 認証開始を要求し、`PublicKeyCredentialRequestOptions`を受信します。
+3. デコードして認証器を呼びます。
+4. 認証器で署名します。
+5. 結果をエンコードし、認証完了要求とともに送ります。
+6. 完了応答をログに出します。
+
+### 結果
+
+![passkey_result.png](https://assets.akuk.in/blog/in-content/1767881400466_passkey_result.webp 'Passkey登録・ログイン後の結果')
+
+`navigator.credentials`には`https`が必須ですが、ローカル開発は例外です！
+
+## おわりに
+
+WebAuthn（Passkey）では利用者が秘密を管理し、サーバーには保存しません。サーバーが侵害されても秘密が漏れない魅力的な方式ですが、パスワード管理アプリを使わない人や、TPMのない機器もあります。そのため補助的な認証として提供されることが多く、WebAuthnだけのパスワードレス構成はあまり見ません。「Passkeyで優先的にログイン」のような設定も増えていますが、まだ過渡期です。パスワードは簡単すぎて、なくならないのかもしれません。:(

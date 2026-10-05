@@ -1,0 +1,52 @@
+---
+title: 'Cryptokey Routing'
+description: 'WireGuard identifies peers by 32-byte Curve25519 public keys. Cryptokey routing combines peer public keys with allowed source IP addresses to decide which packets belong to which peers.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-13T15:24:50.498468'
+updatedAt: '2025-12-18T18:35:44.069987'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 2
+author: 'gymynnym'
+draft: false
+---
+
+# Cryptokey Routing
+
+> In WireGuard, peers are identified by 32-byte `Curve25519` public keys.
+
+**Cryptokey routing** in WireGuard combines a peer’s public key with its allowed source IP addresses to determine which packets should be routed to which peers.
+
+## Cryptokey Routing Table
+
+Here is an example of a WireGuard **cryptokey routing table**.
+
+| Interface Public Key | Interface Private Key | Listen |
+| -------------------- | --------------------- | ------ |
+| `HIgo...8ykw`        | `yAnz...fBmk`         | 41414  |
+
+| Peer Public Key | Allowed Source IPs               |
+| --------------- | -------------------------------- |
+| `xTIB...p8Dg`   | 10.192.122.3/32, 10.192.124.0/24 |
+| `TrMv...WXX0`   | 10.192.122.4/32, 192.168.0.0/16  |
+| `gN65...z6EA`   | 10.10.10.230/32                  |
+
+The interface has **one private key and a listening UDP port**, followed by a list of peers. Each peer is identified by a public key and has a list of allowed source IP addresses.
+
+For an outgoing packet on a WireGuard interface, this table determines which public key to use for encryption. For an incoming packet, WireGuard decrypts and authenticates it, then checks whether its source IP address belongs to that peer’s Allowed Source IPs. A packet that fails validation is discarded.
+
+WireGuard can operate on this simple principle because, unlike IPsec, it is strictly based on Layer 3 and enforces a cleaner network design.
+
+## Endpoint
+
+Specifying a peer’s external IP:port (endpoint) in the **cryptokey routing table** is optional. When an authenticated packet arrives from a peer, WireGuard automatically updates its endpoint using the packet’s outer source IP:port.
+
+> If a peer’s external IP:port is explicitly configured, the address used to initiate the first connection is fixed, but subsequent packets update the endpoint to the address actually observed.
+
+## Roaming
+
+Peers are identified by public keys rather than IP addresses. Even when a peer changes network location, WireGuard automatically updates its endpoint from the source IP/port of newly received authenticated packets.
+
+## Listening Port == Source Port
+
+WireGuard keeps a peer’s listening port and the source port of its outgoing packets identical. This simplifies the design and improves reliability behind NAT, so NAT sessions do not need to be kept alive for long periods. In exceptional cases, keepalive settings can maintain them.

@@ -1,0 +1,148 @@
+---
+title: 'PGroongaのさまざまな関数'
+description: 'PGroongaの関数を使った高度な検索条件、関連度スコア、同義語によるクエリ拡張、HTMLでのキーワード強調を紹介します。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/PGroonga%20%EA%B0%80%EC%9D%B4%EB%93%9C.png
+publishedAt: '2025-12-02T00:49:57.090312'
+updatedAt: '2025-12-03T23:38:31.342086'
+topics: ['postgresql', 'docker']
+series: 'pgroonga-guide'
+seriesOrder: 4
+author: 'gymynnym'
+draft: false
+---
+
+# PGroongaのさまざまな関数
+
+### `pgroonga_condition()`：高度な検索条件
+
+```sql
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@~ pgroonga_condition(
+	'첫 번째',
+	weights => ARRAY[2, 1],
+	index_name => 'articles_pgroonga_idx'
+);
+```
+
+`pgroonga_condition()`は高度な検索条件を作成し、次のようなオプションを受け取ります。
+
+- `keyword`：検索キーワード。
+- `weights`：各列の重みの配列。例では`title`に2、`content`に1を指定しています。
+- `index_name`：使うPGroongaインデックスの名前。
+- `fuzzy_max_distance_ratio`：ファジー検索の最大距離比率（誤字を許容する範囲）。
+- [その他のオプション](https://pgroonga.github.io/reference/functions/pgroonga-condition.html#syntax)。
+
+### `pgroonga_score()`：検索結果の関連度を返す
+
+> `TokenBigram`と韓国語の例では正常に動作しないため、英語の例を使います。`Mecab-ko`トークナイザーなら正常に動作します。
+
+```sql
+CREATE TABLE memos (
+  title text,
+  content text
+);
+
+CREATE INDEX pgroonga_memos_index ON memos
+USING pgroonga ((ARRAY[title, content]))
+
+INSERT INTO memos VALUES ('PostgreSQL', 'PostgreSQL is a relational database management system.');
+INSERT INTO memos VALUES ('Groonga', 'Groonga is the fast full text search engine optimized for Japanese.');
+INSERT INTO memos VALUES ('PGroonga', 'PGroonga is an extension for PostgreSQL to use Groonga as the index.');
+INSERT INTO memos VALUES ('command line', 'There is a groonga command.');
+```
+
+```sql
+SELECT *, pgroonga_score(tableoid, ctid) AS score
+FROM memos
+WHERE ARRAY[title, content] &@~ pgroonga_condition(
+  'PostgreSQL OR Groonga',
+  weights => ARRAY[2, 1],
+  index_name => 'pgroonga_memos_index'
+)
+ORDER BY score DESC;
+--     title     |                               content                                | score
+-- --------------+----------------------------------------------------------------------+-------
+--  PostgreSQL   | PostgreSQL is a relational database management system.               |     3
+--  Groonga      | Groonga is the fast full text search engine optimized for Japanese.  |     3
+--  PGroonga     | PGroonga is an extension for PostgreSQL to use Groonga as the index. |     2
+--  command line | There is a groonga command.                                          |     1
+```
+
+`pgroonga_score()`は検索結果の関連度を`double precision`で返します。引数には`tableoid`と`ctid`を渡します。
+
+> 主キーを含むインデックスを引数に使うこともできますが、性能がよくないため推奨されません。
+
+上記の結果を順に見ると：
+
+1. 2（`PostgreSQL`を含む）＋1（`Groonga`を含む）＝3。
+2. 1（`Groonga`を含む）＝3。
+3. 2（`PostgreSQL`を含む）＝2。
+4. 1（`groonga`を含む）＝1。
+
+このように関連度を計算し、その値を使って検索結果を関連度順に並べることもできます。
+
+### `pgroonga_query_expand()`：クエリ拡張（同義語の処理）
+
+```sql
+CREATE TABLE synonyms (
+  term text,
+  synonyms text[]
+);
+
+CREATE INDEX synonyms_term
+ON synonyms USING pgroonga (term pgroonga_text_term_search_ops_v2);
+
+INSERT INTO synonyms VALUES ('article', ARRAY['기사', '글', '논문']);
+```
+
+- `synonyms`テーブルは同義語辞書を管理します。
+- `synonyms_term`は、`synonyms`辞書を検索するPGroongaインデックスです。
+
+```sql
+SELECT pgroonga_query_expand('synonyms', 'term', 'synonyms', '첫 번째 article') AS query_expand;
+--             query_expand
+-- ------------------------------------
+--  첫 번째 ((기사) OR (글) OR (논문))
+```
+
+上記のクエリで、`article`が同義語辞書を参照して拡張されたことを確認できます。
+
+```
+SELECT * FROM articles
+WHERE ARRAY[title, content] &@~ pgroonga_query_expand(
+  'synonyms',
+  'term',
+  'synonyms',
+  '첫 번째 article'
+);
+--  id |    title     |          content
+-- --+--------------+----------------------------
+--   1 | 첫 번째 기사 | 이것은 첫 번째 기사입니다.
+```
+
+`pgroonga_query_expand()`は同義語辞書でクエリを拡張し、次の引数を順に受け取ります。
+
+- `table_name`：同義語辞書のテーブル名。
+- `term_column_name`：辞書で検索語を保存する列の名前。
+- `synonyms_column_name`：辞書で同義語の配列を保存する列の名前。
+- `query`：拡張するクエリ文字列。
+
+### `pgroonga_snippet_html()`：検索語の強調表示（HTML）
+
+```sql
+SELECT id, unnest(
+  pgroonga_snippet_html(
+    title,
+    pgroonga_query_extract_keywords('첫 번째')
+  )
+) AS highlighted_title
+FROM articles
+WHERE ARRAY[title, content] &@~ '첫 번째';
+--  id |                           highlighted_title
+-- ----+------------------------------------------------------------------------
+--   1 | <span class="keyword">첫</span> <span class="keyword">번째</span> 기사
+```
+
+- `pgroonga_snippet_html()`は、検索語を含む部分をspanタグで囲んだ文字列の配列を返します。
+  - 例では`unnest()`で配列を展開しています。
+- `pgroonga_query_extract_keywords()`は渡されたクエリからキーワードを抽出します。

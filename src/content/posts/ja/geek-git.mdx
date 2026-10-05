@@ -1,0 +1,175 @@
+---
+title: 'GeekらしくGitを設定する'
+description: '毎日使うGitを自分の作業に合わせて設定します。.gitconfigの各項目、便利なalias、SSHによるコミット署名など、私の設定を紹介します。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/Geek%EC%8A%A4%EB%9F%BD%EA%B2%8C%20Git%20%EC%84%A4%EC%A0%95%ED%95%98%EA%B8%B0.png
+publishedAt: '2025-11-09T18:32:03.694025'
+updatedAt: '2025-11-21T20:48:34.088929+00:00'
+topics: ['git', 'github']
+author: 'gymynnym'
+draft: false
+---
+
+# GeekらしくGitを設定する
+
+### はじめに
+
+[Git](https://git-scm.com)をどれくらい使いますか？今の開発者には必須の道具に思えます。まだSVNや共有ドライブで「このファイルを編集します！」と叫んでいる人はいませんよね？よく使う道具を自分に合わせて調整すると効率が上がり、ちょっと格好よくなった気分にもなれます。今回は私のGit設定と使い方を紹介します。
+
+### `.gitconfig`：Gitの設定ファイル
+
+グローバルなGit設定ファイルは、通常`~/.gitconfig`にあります。  
+すでに存在する場合は、以前の設定が残っているかもしれません。例えばコミットのエラーを調べて、`git config --global email <your_email>`を実行したことがあるかもしれません（私がそうでした）。これはグローバル設定にメールの項目を追加するコマンドです。
+
+### `[user]`：ユーザー情報
+
+```
+[user]
+    name = <your_name>
+    email = <your_email>
+```
+
+`[user]`は、コミット（`git commit`）で使う**ユーザー情報**を指定します。
+
+### `[core]`：基本設定
+
+```
+[core]
+    editor = nvim  # 好みのエディターに変更
+    fsmonitor = true  # 性能向上のため有効化
+```
+
+`[core]`ではGitの**基本的な動作**を指定します。  
+`editor`はコミットやリベースで使うエディターです。私はターミナルからGitを使うことが多いのでNeovimにしています。  
+`fsmonitor`は、ファイル変更の検出に**File System Monitor**を使うか指定します。有効にするとgit statusやgit diffなどが速くなる場合があります！
+
+### `[init]`：初期化の設定
+
+```
+[init]
+    defaultBranch = master
+```
+
+`[init]`は、新しいリポジトリを`git init`で初期化するときの設定です。  
+`defaultBranch`は初期ブランチの名前です。私は伝統的な**master**を使っています。**main**にすると、**develop**も**dev**に変えないといけない気がするんですよね。
+
+### `[push]`、`[fetch]`、`[pull]`：push・fetch・pullの設定
+
+```
+[push]
+  default = simple
+  autoSetupRemote = true
+  followTags = true
+```
+
+`[push]`は`git push`の標準動作を指定します。
+
+- `default`は、標準でどのブランチをpushするか指定します。`simple`なら、現在と同じ名前のリモートブランチへpushします。
+- `autoSetupRemote`をtrueにすると、新しいローカルブランチのpush時に`--set-upstream`が自動適用されます。とても便利です！
+- `followTags`をtrueにすると、そのブランチが参照するタグもpushします。
+
+```
+[fetch]
+  all = true
+  prune = true
+  pruneTags = true
+```
+
+`[fetch]`は`git fetch`の標準動作を指定します。
+
+- `all`をtrueにすると、すべてのリモートから変更を取得します。
+- `prune`をtrueにすると、リモートで削除されたブランチのローカル参照も削除します。
+- `pruneTags`をtrueにすると、リモートで削除されたブランチのローカル参照も削除します。
+
+```
+[pull]
+  rebase = true
+```
+
+`[pull]`は`git pull`の標準動作を指定します。
+
+- `rebase`をtrueにすると、pull時にマージではなくリベースを使います。履歴をすっきり保つため、私はこの設定が好きです。
+
+### `[branch]`、`[tag]`：ブランチとタグの設定
+
+```
+[branch]
+  sort = -committerdate
+
+[tag]
+  sort = version:refname
+```
+
+`[branch]`の`sort`は、`git branch -l`で表示するブランチの並び順を指定します。  
+`[tag]`の`sort`は、`git tag -l`で表示するタグの並び順を指定します。
+
+### `[alias]`：コマンドの別名
+
+```
+[alias]
+  st = add
+  stage = add
+  unst = restore --staged
+  unstage = restore --staged
+  cm = commit
+  cmend = commit --amend
+  cmcnt = shortlog -sn # commit count
+  mg = merge
+  rb = rebase
+  br = branch
+  sw = switch
+  fuck = reset --hard HEAD
+
+  # log, log with graph
+  lg = log --oneline --graph --date=relative --pretty=format:'%C(bold cyan)%h%C(reset)%C(yellow)%d%C(reset) %s %C(cyan)(%cr)%C(bold italic blue) [%an]'
+  lgg = log --all --oneline --graph --date=relative --pretty=format:'%C(bold cyan)%h%C(reset)%C(yellow)%d%C(reset) %s %C(cyan)(%cr)%C(bold italic blue) [%an]'
+  changelog = log --oneline --pretty=format:'%C(bold cyan)%h%C(reset) %s'
+```
+
+`[alias]`は`.gitconfig`の花形だと思います。自分専用のコマンドや略語でGitを格好よくできます。私の設定は次のとおりです。
+
+- `git st` = `git stage` = `git add`。addはステージングだと考えてこの略語にしています。その代わりstashは全部入力します。
+- `git unst` = `git unstage` = `git restore --staged`
+- `git cm` = `git commit`
+- `git cmend` = `git commit --amend`（最後のコミットを修正）。
+- `git cmcnt` = `git shortlog -sn`（コミット数を数える）。
+- `git mg` = `git merge`
+- `git rb` = `git rebase`
+- `git br` = `git branch`
+- `git sw` = `git switch`
+- `git fuck` = `git reset --hard HEAD`（こんなに使うとは思いませんでした）。
+- `git lg` = コミット履歴をグラフで表示。
+- `git lgg` = 全ブランチのコミット履歴をグラフで表示。
+- `git changelog` = 簡単なコミットログを表示（PRを書くときに便利）。
+
+### 追加設定：SSH鍵でコミットに署名する
+
+```
+[user]
+  ...
+  signingkey = <your_signingkey_path>
+
+[commit]
+  gpgsign = true
+
+[gpg]
+  format = ssh
+```
+
+コミット署名は任意ですが、「このコミットは自分が書いた！」と証明したいなら使ってみてください。GitHubでは誇らしいVerifiedバッジも付きます！
+
+GPG鍵でも署名できますが、SSH鍵のほうが簡単で現代的なので、SSH署名を説明します。
+
+既存のSSH鍵があれば使えます。なければ`ssh-keygen`で作ります。Ed25519は格好いいですね。
+
+`user.signingkey`には、署名用SSH公開鍵ファイルのパスを指定します。  
+`commit.gpgsign`をtrueにして、すべてのコミットを自動署名します。  
+GPGではなくSSHで署名するので、`gpg.format`はsshにします。
+
+### おわりに
+
+読んでいただきありがとうございます。私の`.gitconfig`はこれからも変わるでしょうし、楽しみでもあります。便利な設定や格好いいaliasがあれば教えてください。_私もありがたくいただきます。_
+
+**参考**
+
+- https://news.ycombinator.com/item?id=39400352
+- https://www.youtube.com/watch?v=aolI_Rz0ZqY

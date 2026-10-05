@@ -1,0 +1,98 @@
+---
+title: 'ElysiaJS - 高速なバックエンドフレームワーク'
+description: 'BunとElysiaJSが高速な理由を、ルーティング、JITコンパイル、静的コード解析の観点から見ていきます。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/ElysiaJS_%20%EB%B9%A0%EB%A5%B8%20%EB%B0%B1%EC%97%94%EB%93%9C%20%ED%94%84%EB%A0%88%EC%9E%84%EC%9B%8C%ED%81%AC.png
+publishedAt: 2026-02-09
+updatedAt: 2026-02-15T17:02:01.605731+00:00
+topics:
+  - elysiajs
+  - bun
+draft: false
+---
+
+# ElysiaJS：高速なバックエンドフレームワーク
+
+## はじめに
+
+![elysia_v.webp](https://assets.akuk.in/blog/in-content/1770646599350_elysia_v.webp 'かわいいバージョンのElysiaJSロゴ')
+
+[ElysiaJS](https://elysiajs.com/)はBunエコシステムで最も広く使われるバックエンドフレームワークで、高性能と効率的で安定した型システムを備えています。開発者体験もとてもよく、私も個人のJS/TS Webプロジェクトで積極的に使っています。
+
+この記事では、ElysiaJSが他のフレームワークより魅力的に感じられた理由を、**性能の観点**から説明します。
+
+> 以降はElysiaJSをElysiaと略します。
+
+## Bun
+
+Elysiaは基本的に[Bun](https://bun.com/)ランタイムを前提として開発されています。Node.jsやDenoでも動作しますが、本来の性能を出すにはBunが必要です。特に重要なのは、`Bun.serve.routes`などBunのコアAPIを使うためです。
+
+`Bun.serve`は非常に高性能です。単に「ZigとC++で書かれているから」で終わらず、具体的な理由を見ていきます。
+
+### 1. uWebSocketsのツリー型ルーティング
+
+**uWebSockets**はC++製のHTTP・WebSocketサーバーライブラリです。**非常に高速で安定している**ため、暗号資産の取引プラットフォームなどでよく使われます。
+
+`Bun.serve`はuWebSocketsの**ツリー型ルーティング**を使っています。BunのHTTP・WebSocketサーバーは、内部エンジンにuWebSocketsを採用しています。
+
+### 2. SIMDによるルートパラメーターのデコード高速化
+
+**SIMD**はSingle Instruction, Multiple Dataの略で、一つのCPU命令で複数のデータを処理する技術です。多くのプログラムは**SISD（Single Instruction, Single Data）**を使いますが、Bunのようなランタイムやコンパイラーは、テキスト処理に強いSIMDを積極的に使います。
+
+`Bun.serve`はルートパラメーターのデコードにSIMDを使って高速化します。
+
+### 3. JavaScriptCoreの内部構造をキャッシュ
+
+BunはJavaScriptエンジンに**JavaScriptCore**を使い、その内部構造をキャッシュします。これにより、ルーティング関連のオブジェクトへアクセスする際のオーバーヘッドを減らしています。
+
+## JIT「コンパイラー」
+
+> ここでいう「コンパイラー」は、ある言語を別の言語へ変換する従来の意味ではありません。定義されたルーターとミドルウェアから、リクエスト処理用の最適化コードを動的に生成します。Elysiaのドキュメントでも、混同を避けるため引用符を付けています。
+
+Elysiaにはバージョン0.4から**JIT「コンパイラー」**が内蔵されています。
+
+各ルートへの最初のリクエストが届くと、効率的に処理するための最適化コードを**実行中に（on-the-fly）**動的生成します。
+
+最新のCPUでは多くの場合0.005ms未満で完了し、ルートごとに一度だけ実行されます。生成コードの保存に必要なメモリも少量です。
+
+JIT「コンパイラー」は`new Function(...)`や`eval(...)`を使います。セキュリティ問題を招くので使うなと教わったものですが、Elysiaチームはこれを利用して徹底した最適化を実現しました。
+
+そのため、JIT「コンパイラー」の動作を理解すると、Elysiaをより効果的に使えます。
+
+## Sucrose（静的コード解析）
+
+**Sucrose**は、JIT「コンパイラー」と組み合わせて使う静的コード解析モジュールです。
+
+```ts
+import { Elysia } from 'elysia';
+
+const app = new Elysia().patch('/user/:id', ({ params }) => {
+  return { id: params.id };
+});
+```
+
+上記の`PATCH /user/:id`では、`params`だけを解析すればよいことが分かります。
+
+**Sucrose**はコードを調べ、`body`、`query`、`headers`などは不要なので、`params`だけを解析するよう指示します。
+
+従来の方法では`params`以外の項目も解析し、性能が低下する可能性があります。Elysiaは各ルートに必要な最小限の解析だけを行うことで高速化しています。
+
+また、Elysia独自の機能に対応するため、一般的な解析ツールではなく、専用の静的解析ライブラリSucroseを開発しました。
+
+## おわりに
+
+BunとElysiaの組み合わせはとても高速で、開発者体験も良好です。
+
+Bun v1.0は2023年に公開され、プロダクションで使われる例も見かけます。2026年2月時点では、多くのアプリ配布プラットフォームがBunランタイムを提供しています。
+
+ただ、個人的にはBunのエコシステムはまだ成熟していないと感じます。マイナー更新でも既存アプリのランタイムエラーにつながる重大な方針変更があり、新機能も速いペースで追加されます。
+
+例えば[v1.3.4](https://bun.com/blog/bun-v1.3.4#standalone-executables-no-longer-load-config-files-at-runtime)では、スタンドアロン実行ファイルが`tsconfig`と`package.json`を自動で読み込まなくなり、LogHubの障害につながりました。
+
+> **関連Issue**：https://github.com/oven-sh/bun/issues/25395（私も議論に参加しました！）。
+
+それでも、JS/TSエコシステムで圧倒的な性能を持つため、JS/TSバックエンドではElysiaを最も気に入っています。
+
+## 参考
+
+- https://elysiajs.com/internal/jit-compiler.html
+- https://bun.com/docs/runtime/http/routing

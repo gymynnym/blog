@@ -1,0 +1,51 @@
+---
+title: 'PGroongaとは？'
+description: 'PostgreSQLだけで強力な検索システムを構築する方法を紹介するシリーズです。Elasticsearchなどの外部検索エンジンを運用せず、PGroongaで多言語の全文検索を実現します。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/PGroonga%20%EA%B0%80%EC%9D%B4%EB%93%9C.png
+publishedAt: '2025-12-02T00:18:16.364413'
+updatedAt: '2025-12-02T01:04:53.346220'
+topics: ['postgresql', 'docker']
+series: 'pgroonga-guide'
+seriesOrder: 1
+author: 'gymynnym'
+draft: false
+---
+
+# PGroongaとは？
+
+## はじめに
+
+このシリーズでは、**PostgreSQL**だけを使って強力な検索システムを構築する方法を扱います。  
+Elasticsearchなどの外部検索エンジンを使わず、PostgreSQL内でシンプルに解決することを目指します。
+
+## ElasticSearch vs PGroonga
+
+[**Elasticsearch**](https://www.elastic.co/elasticsearch)は、大量のデータを高速に検索できる強力な**検索エンジン**です。水平スケーリングや非構造化文書の検索など、多くの機能を提供します。ただし、別のシステムとして運用・管理する必要があり、RDBとのデータ同期が複雑になる場合もあります。設定やチューニングの学習コストも高く、初心者には導入のハードルがあります。
+
+一方、[**PGroonga**](https://pgroonga.github.io/)はPostgreSQLの**拡張機能**です。[**Groonga**](https://groonga.org/)をインデックスエンジンとして統合し、PostgreSQL内で強力な多言語全文検索を可能にします。別の検索エンジンを運用する必要も、データ同期の問題もありません。設定も比較的簡単です。:)
+
+> **Groonga**は転置インデックスを使う全文検索エンジンです。文書の登録がすぐに検索結果へ反映され、読み取りロックなしで更新できるため、リアルタイムアプリケーションに適しています。列指向DBMSでもあり、集計クエリに強く、MySQLやPostgreSQLなどの行指向システムの弱点を補えます。詳しくは[Characteristics of Groonga](https://groonga.org/docs/characteristic.html)をご覧ください。
+
+もちろん、Elasticsearchのほうが適している場合もあります。
+
+- 水平スケーリングが必要な場合。
+- パイプラインや機械学習との統合など、複雑な検索機能が必要な場合。
+- 強力な分散ログ・メトリクス分析が必要な場合（ELK：Elasticsearch、Logstash、Kibana）。
+- 要件でElasticsearchの使用が指定されている場合。:(
+
+作りたい検索システムの構造が単純なら、PGroongaは開発者にとってうれしい選択肢になり得ます。
+
+## PGroongaの処理の流れ
+
+PGroongaインデックスによる全文検索は、次のように進みます。
+
+1. **Normalize**：次のような方法で入力文字列を正規化します。
+   - 大文字と小文字の統一。
+   - 空白や記号の処理。
+   - Unicode正規化。
+   - 不要な文字の除去。
+2. **Tokenize**：正規化した文字列をトークンに分割します。
+   - 言語に適したTokenizerを選ぶことが重要です。例：日本語 -> `Mecab`。
+   - 例：`"postgresql 검색"` -> `["po", "os", "st", "tg", ... , "검색"]`。
+3. **インデックス参照と比較**：生成したトークンを使ってPGroongaでデータを検索します。
+4. **結果の返却**：検索条件を満たす文書（レコード）を返します。

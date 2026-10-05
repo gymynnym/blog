@@ -1,0 +1,366 @@
+---
+title: '[Best Practice] ElysiaJS編'
+description: '個人プロジェクトの経験と公式ガイドに基づくElysiaJSの実践例です。フォルダー構造、サービスとモデル、コンテキスト拡張、Drizzle ORMでのDBアクセスを紹介します。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/%5BBest%20Practice%5D%20ElysiaJS%20%ED%8E%B8.png
+publishedAt: '2026-04-05T23:27:50.943435'
+updatedAt: '2026-04-24T20:50:15.995493+00:00'
+topics: ['typescript', 'elysiajs']
+author: 'gymynnym'
+draft: false
+---
+
+# [Best Practice] ElysiaJS編
+
+## はじめに
+
+この記事では、個人プロジェクトでElysiaJSを使って得た経験をもとに、自分なりのBest Practiceをまとめます。
+
+公式の[Best Practice](https://elysiajs.com/essential/best-practice.html)の考え方をもとに、私の開発経験を加えて説明します。
+
+## プロジェクトの作成
+
+```bash
+$ bun create elysia <project-name>
+$ cd <project-name>
+
+# optional
+$ bun add -D prettier
+```
+
+[`bun create`](https://bun.com/docs/runtime/templating/create)で作成し、チームの規則や好みに合わせてフォーマッターやリンターを設定します。
+
+## フォルダー構造
+
+> [ElysiaJS - Folder Structure](https://elysiajs.com/essential/best-practice.html#folder-structure)によると、特定の構造を指定していないため、開発者が自由に決められます。
+
+### 1. `src/index.ts`：エントリーポイント
+
+`src/index.ts`がエントリーポイントであることは、`package.json`で確認できます。
+
+```json
+{
+  ...
+  "scripts": {
+    ...
+    "dev": "bun run --watch src/index.ts"
+  },
+  ...
+  "module": "src/index.js"
+}
+```
+
+生成される`src/index.ts`は次のとおりです。
+
+```ts
+import { Elysia } from 'elysia';
+
+const app = new Elysia().get('/', () => 'Hello Elysia').listen(3000);
+
+console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
+```
+
+このコードは次の処理を行います。
+
+1. `Elysia`オブジェクトを作ります。
+2. `GET /`のREST APIを定義します。
+3. `listen`でWebサーバーを起動します。
+
+### 2. `src/modules`：モジュール
+
+```
+src
+└── modules
+    ├── auth
+    │   ├── index.ts
+    │   ├── message.ts
+    │   ├── model.ts
+    │   └── service.ts
+    ├── common
+    │   ├── error.ts
+    │   └── model.ts
+    └── user
+        └── repository.ts
+```
+
+今回は**機能・ドメインごとの構造**にしました。サービスやモデルなど関連コードを一つのディレクトリにまとめ、凝集度を高め、機能単位で独立して拡張できるようにします。
+
+`src/modules`の下には**機能名やドメイン名**を使い、各ドメインに必要なレイヤーごとにファイルを分けます。
+
+よく使うレイヤーは次のとおりです。
+
+- `index`：外部のElysiaアプリから`use`で追加できるモジュール型のアプリ。
+- `service`：ビジネスロジックを担当するサービス層。
+- `repository`：DB操作を担当する層。
+- `model`：データ構造とバリデーション。
+- `message`：モジュールで使うメッセージ定数。
+
+### 3. `src/plugins`：プラグイン
+
+```
+src
+└── plugins
+    ├── database
+    │   ├── index.ts
+    │   └── schema.ts
+    ├── jwt
+    │   ├── index.ts
+    │   └── model.ts
+    └── response
+        ├── index.ts
+        └── utils.ts
+```
+
+モジュールは特定ドメインのビジネスロジックを持ち、プラグインは複数のモジュールが共用する機能やリソースを提供します。
+
+プラグインもサブフォルダーには**機能名やドメイン名**を使い、`index`は外部から`use`で追加できるモジュール型のElysiaアプリを表します。
+
+### 4. `src/handlers`：ハンドラー
+
+```
+src
+└── handlers
+    └── error
+        └── index.ts
+```
+
+ハンドラーはコンテキスト拡張ではなく、`onRequest`や`onError`などのライフサイクルイベントを処理します。
+
+この例の`error/index.ts`は、`onError`によるエラー処理を含みます。
+
+### 補足：パスの別名
+
+```json
+// tsconfig.json
+{
+  "compilerOptions": {
+    ...
+    "paths": {
+      "@/*": ["./src/*"],
+      "@mo/*": ["./src/modules/*"],
+      "@pl/*": ["./src/plugins/*"]
+    }
+  ...
+}
+```
+
+`tsconfig.json`の`paths`で各フォルダーの別名を設定すると、相対パスではなく別名を使った絶対パスでimportできて便利です。
+
+```ts
+import { AuthModule } from '../../../modules/auth'; // 設定前
+import { AuthModule } from '@mo/auth'; // 設定後
+```
+
+## レイヤー
+
+### 1. サービス
+
+ElysiaJSには二つのサービス実装方法があります。[出典](https://elysiajs.com/essential/best-practice.html#service)。
+
+1. リクエストに依存しないサービス（推奨）。
+2. リクエストに依存するサービス。
+
+リクエストコンテキストに直接アクセスしないなら、リクエスト非依存の静的クラスや関数が推奨されます。
+
+`abstractクラス＋staticメソッド`は、状態を持たないロジックを保ち、依存関係を明示的に渡すようにできるため効率的です。
+
+サービスの例です。
+
+```ts
+interface AuthServiceTool {
+  db: Database;
+  jwt: JWTTool;
+}
+
+export abstract class AuthService {
+  static async join(body: AuthModel.JoinRequest, { db, jwt }: AuthServiceTool) { ... }
+
+  static async login(body: AuthModel.LoginRequest, { db, jwt }: AuthServiceTool) { ... }
+}
+```
+
+ユーティリティオブジェクトが増えるほどコードが複雑になるため、`ServiceTool`インターフェースにまとめて渡しています。
+
+すべてのツールが不要なメソッドでは、`Omit`や`Pick`で必要なものだけに絞れます。
+
+### 2. モデル
+
+モデルやDTOの検証には`zod`や`Valibot`なども使えますが、性能面ではTypeBoxラッパーの`t`が推奨されます。
+
+```ts
+import { UnwrapSchema, t } from 'elysia';
+
+export namespace AuthModel {
+  const username = t.String({
+    minLength: 3,
+    maxLength: 20,
+    trim: true,
+  });
+  const password = t.String({
+    minLength: 6,
+    maxLength: 32,
+    pattern: '^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{6,}$',
+  });
+  const age = t.Number({
+    minimum: 18,
+    maximum: 120,
+  });
+
+  export const joinRequest = t.Object({ username, password, age });
+  export type JoinRequest = UnwrapSchema<typeof joinRequest>;
+
+  export const loginRequest = t.Object({ username, password });
+  export type LoginRequest = UnwrapSchema<typeof loginRequest>;
+}
+```
+
+`t.Object`で検証モデルを作り、`UnwrapSchema<typeof model>`で型を取り出せます。ランタイム検証と型推論を同時に満たせて便利です。
+
+作成したモデルは、次のようにコントローラーで使えます。
+
+```ts
+...
+  .post(
+    '/join',
+    async ({ body, db, jwt, set, created }) => {
+      const { token } = await AuthService.join(body, { db, jwt });
+      set.headers = { Authorization: `Bearer ${token}` };
+      return created(AuthMessage.JOIN_SUCCESS);
+    },
+    {
+      body: AuthModel.joinRequest,
+      response: {
+        // 自動の型推論
+        201: CommonModel.messageResponse,
+        400: CommonModel.fieldErrorsResponse,
+        409: CommonModel.fieldErrorsResponse,
+      },
+    }
+  )
+...
+```
+
+## 私が実際に使うパターン
+
+### 1. コンテキストの拡張
+
+> ElysiaJSの**コンテキスト**はリクエストごとに作られるオブジェクトです。body、query、params、headersなどのデータと、アプリが追加した値を含みます。
+
+`state`、`decorate`、`derive`、`resolve`はすべて**コンテキストを拡張**します。
+
+#### `state`
+
+`state`はアプリ全体で使えるオブジェクトを登録します。初期化後も値を変更できます。
+
+#### `decorate`
+
+`decorate`は追加のプロパティを登録します。定数や読み取り専用のシングルトンに使います。
+
+> `state`と同様に変更はできますが、推奨されません！
+
+#### `derive`
+
+`derive`は既存のコンテキスト値から、新しいプロパティを作って追加します。
+
+> 型安全性を保証しないため、必要なら`resolve`が推奨されます。
+
+#### `resolve`
+
+`resolve`は、型安全性を保証する`derive`のバージョンです。
+
+ライフサイクルの検証後に実行されるため、bodyやheadersなどのリクエストデータの型安全性が保証されます。
+
+そのため、通常は`derive`より`resolve`が推奨されます。
+
+#### 結論
+
+私は次の基準で使い分けています。
+
+- リクエストに関係のないグローバル値 -> `state`。
+- 定数やシングルトン -> `decorate`。
+- 既存値から新しい値を作る -> `resolve`。
+- 型安全性が保証されないため、ほぼ使わない -> `derive`。
+
+### 2. データベースオブジェクトへのアクセス
+
+ElysiaJSはフレームワークですが、DXを重視し、コードスタイルを厳密には指定していません。ただ、全体で使う定数やオブジェクトには`decorate`がよいパターンだと思います。
+
+```ts
+// src/plugins/database/index.ts
+const db = drizzle(...);
+export const DatabasePlugin = new Elysia({ name: 'database' }).decorate('db', db);
+
+// src/modules/auth/index.ts
+export const AuthModule = new Elysia({
+  name: 'auth',
+  prefix: '/auth',
+})
+  ...
+  .use(DatabasePlugin)
+  .post('/join', async ({ db, ... }) => ...)
+```
+
+DBオブジェクトを単にexport/importするのではなく、`decorate`で登録し、ルーターで取り出してサービス層へ渡します。前述の`ServiceTool`に含めると、受け渡しもすっきりします。
+
+### 3. リポジトリ層：Drizzle ORMの場合
+
+```ts
+import { Database, schema, Transaction } from '@pl/database/schema';
+import { eq } from 'drizzle-orm';
+
+const { user } = schema;
+
+type UserRepositoryClient = Pick<Database, 'select' | 'insert'> | Pick<Transaction, 'select' | 'insert'>;
+
+export class UserRepository {
+  constructor(private readonly db: UserRepositoryClient) {}
+
+  async findByEmail(email: string) {
+    const [foundUser] = await this.db.select().from(user).where(eq(user.email, email));
+    return foundUser;
+  }
+
+  async existsById(id: number) {
+    const [foundUser] = await this.db.select().from(user).where(eq(user.id, id));
+    return !!foundUser;
+  }
+
+  async save(value: typeof user.$inferInsert) {
+    const [savedUser] = await this.db.insert(user).values(value).returning();
+    return savedUser;
+  }
+}
+```
+
+これはDrizzle ORMを使うUserドメインの簡単なリポジトリです。コンストラクターで`db`を受け取り、DB操作に使います。
+
+サービスの各メソッドで必要なときに作成して使えます。例は次のとおりです。
+
+```ts
+...
+export abstract class AuthService {
+  static async join(body: AuthModel.JoinRequest, { db, jwt, password }: AuthServiceTool) {
+    return db.transaction(async (tx) => {
+      const userRepository = new UserRepository(tx);
+      const existinguser = await userRepository.findByEmail(body.email);
+      ...
+      const savedUser = await userRepository.save(newUser);
+      ...
+    });
+  }
+...
+}
+```
+
+UserRepositoryを`resolve`で登録しないのは、モジュール内に使わないルートもあるためです。不要なオブジェクト生成とコンテキスト拡張を避けます。
+
+必要なときだけサービス層で作成する方法を勧めます。
+
+> ElysiaJSの[Sucrose静的解析器](https://elysiajs.com/internal/jit-compiler.html#static-code-analysis-sucrose)が解決してくれると思いましたが、そうではありませんでした。:(
+
+## おわりに
+
+ElysiaJSは自由度が高くDXも優れているため、初期段階で明確な構造と規則を決めることが特に大切だと感じました。
+
+ゆっくりした週末に経験を一つの文書へまとめると、考えが整理され、今後の学習の方向もより明確になりました。
+
+Best Practiceプロジェクトが完成したらリポジトリを公開し、ここにリンクを載せます！

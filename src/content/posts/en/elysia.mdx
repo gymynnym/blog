@@ -1,0 +1,98 @@
+---
+title: 'ElysiaJS - A Fast Backend Framework'
+description: 'Explore why Bun and ElysiaJS are fast through routing, JIT compilation, and static code analysis.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/ElysiaJS_%20%EB%B9%A0%EB%A5%B8%20%EB%B0%B1%EC%97%94%EB%93%9C%20%ED%94%84%EB%A0%88%EC%9E%84%EC%9B%8C%ED%81%AC.png
+publishedAt: 2026-02-09
+updatedAt: 2026-02-15T17:02:01.605731+00:00
+topics:
+  - elysiajs
+  - bun
+draft: false
+---
+
+# ElysiaJS: A Fast Backend Framework
+
+## Introduction
+
+![elysia_v.webp](https://assets.akuk.in/blog/in-content/1770646599350_elysia_v.webp 'A cute version of the ElysiaJS logo')
+
+[ElysiaJS](https://elysiajs.com/) is the most widely used backend framework in the Bun ecosystem, offering high performance and an efficient, reliable type system. Its developer experience is excellent, and I regularly use it for personal JS/TS web projects.
+
+In this article, I explain why ElysiaJS appeals to me more than other frameworks, focusing on **performance**.
+
+> From here on, I will shorten ElysiaJS to Elysia.
+
+## Bun
+
+Elysia was designed primarily for the [Bun](https://bun.com/) runtime. It works on Node.js and Deno as well, but Bun is essential for its full performance. The most important reason is its use of Bun’s core APIs, including `Bun.serve.routes`.
+
+`Bun.serve` is extremely fast. Rather than stopping at “it is written in Zig and C++,” let’s examine the specific reasons.
+
+### 1. uWebSockets’ Tree-based Routing
+
+**uWebSockets** is a C++ HTTP and WebSocket server library. It is **very fast and stable**, making it popular on cryptocurrency trading platforms.
+
+`Bun.serve` uses uWebSockets’ **tree-based routing**. Bun itself uses uWebSockets as the internal engine for its HTTP and WebSocket servers.
+
+### 2. SIMD-accelerated Route Parameter Decoding
+
+**SIMD** stands for Single Instruction, Multiple Data: processing several data items with one CPU instruction. Most programs use **SISD (Single Instruction, Single Data)**, but runtimes and compilers such as Bun actively use SIMD for text processing.
+
+`Bun.serve` accelerates route parameter decoding with SIMD.
+
+### 3. Caching JavaScriptCore’s Internal Structures
+
+Bun uses **JavaScriptCore** as its JavaScript engine and caches internal engine structures to reduce the overhead of accessing routing-related objects.
+
+## JIT “Compiler”
+
+> “Compiler” here does not mean a traditional language-to-language translator. It dynamically generates optimized request-handling code from the defined routes and middleware. Elysia’s documentation uses quotation marks to avoid this confusion.
+
+Elysia has included a **JIT “compiler”** since version 0.4.
+
+When the first request arrives for a route, Elysia dynamically generates optimized handling code **on the fly**.
+
+On modern CPUs this usually takes less than 0.005 ms, happens only once per route, and requires little memory to store the generated code.
+
+The JIT “compiler” uses `new Function(...)` or `eval(...)`, constructs we are often taught to avoid because of security risks. The Elysia team uses them to achieve aggressive optimization.
+
+Understanding how the JIT “compiler” works helps developers use Elysia more effectively.
+
+## Sucrose (Static Code Analysis)
+
+**Sucrose** is a static code analysis module used alongside the JIT “compiler.”
+
+```ts
+import { Elysia } from 'elysia';
+
+const app = new Elysia().patch('/user/:id', ({ params }) => {
+  return { id: params.id };
+});
+```
+
+In the code above, requests to `PATCH /user/:id` require parsing only `params`.
+
+**Sucrose** inspects this code and directs Elysia to parse only `params`, since `body`, `query`, `headers`, and other properties are unnecessary.
+
+Traditional approaches parse all properties, potentially reducing performance. Elysia optimizes performance by parsing only what each route needs.
+
+The team built its own static analysis library, Sucrose, rather than using a traditional analysis tool, to support Elysia-specific features.
+
+## Closing Thoughts
+
+Bun + Elysia is extremely fast and offers a good developer experience.
+
+Bun v1.0 was released in 2023, and I occasionally see it used in production. As of February 2026, most application deployment platforms offer Bun as a runtime option.
+
+Personally, though, I still do not consider the Bun ecosystem mature. Even minor releases can introduce policy changes that cause runtime errors in existing applications, and new features arrive quickly.
+
+For example, [v1.3.4](https://bun.com/blog/bun-v1.3.4#standalone-executables-no-longer-load-config-files-at-runtime) stopped automatically loading `tsconfig` and `package.json` in standalone executables, which caused an outage in LogHub.
+
+> **Related issue**: https://github.com/oven-sh/bun/issues/25395 (I joined the discussion myself!).
+
+Despite this, its outstanding performance in the JS/TS ecosystem makes Elysia my favorite JS/TS backend framework.
+
+## References
+
+- https://elysiajs.com/internal/jit-compiler.html
+- https://bun.com/docs/runtime/http/routing

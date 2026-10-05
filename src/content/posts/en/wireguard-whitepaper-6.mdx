@@ -1,0 +1,84 @@
+---
+title: 'Timers and Stateless UX'
+description: 'WireGuard handles sessions, perfect forward secrecy, and handshakes in the background. Its timer state machine manages rekeying, key rotation, handshake retries, and passive keepalives.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-18T21:53:12.191644'
+updatedAt: '2025-12-18T21:53:12.434701'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 6
+author: 'gymynnym'
+draft: false
+---
+
+# Timers and Stateless UX
+
+Users can send packets with WireGuard simply by configuring **their private key and the other peer’s public key**. Session management, perfect forward secrecy, and handshakes are handled entirely **in the background**. The whitepaper describes this as **appearing stateless from the user’s perspective**.
+
+Earlier VPNs with similar designs were prone to bugs. WireGuard addresses this with a very simple **timer state machine**.
+
+## 1. Basic Setup
+
+The **timer state machine** uses these constants:
+
+| Symbol                  | Value                    |
+| ----------------------- | ------------------------ |
+| `Rekey-After-Messages`  | 2^60 messages            |
+| `Reject-After-Messages` | 2^64 - 2^13 - 1 messages |
+| `Rekey-After-Time`      | 120 seconds              |
+| `Reject-After-Time`     | 180 seconds              |
+| `Rekey-Attempt-Time`    | 90 seconds               |
+| `Rekey-Timeout`         | 5 seconds                |
+| `Keepalive-Timeout`     | 10 seconds               |
+
+> **Rekeying** means periodically renewing encryption keys.
+
+WireGuard never sends duplicate connection requests within a `Rekey-Timeout` interval.
+
+A secure session is created after a handshake response is successfully received. Whenever a timer expiration triggers a connection request, some **jitter (random delay)** is added to the expiration time to prevent repeated collisions from both peers attempting handshakes simultaneously.
+
+## 2. Message Transmission Limits
+
+Secure sessions are periodically **rekeyed** under either condition:
+
+1. **Message limit**: rekey after at least `Rekey-After-Messages` data messages have been sent.
+2. **Time limit**: rekey after `Rekey-After-Time` has elapsed.
+
+Only the **initiator of the current session** leads rekeying, preventing the **thundering herd problem**.
+
+> **Thundering herd problem**: both sides requesting key exchange at the same time.
+
+If rekeying fails and `Reject-After-Time` elapses, WireGuard **blocks communication** until a new 1-RTT handshake succeeds.
+
+## 3. Key Rotation
+
+WireGuard guarantees **perfect forward secrecy**. It continually renews keys so that compromising a key does not allow past communications to be decrypted.
+
+However, network delays may cause a packet encrypted with an older key to arrive late. Without that key, the packet would have to be discarded.
+
+To avoid this, WireGuard keeps three keys in memory: `Current`, `Previous`, and `Next`. When a handshake completes, `Next` becomes `Current`, `Current` becomes `Previous`, and the old `Previous` is erased.
+
+## 4. Initiating and Retrying Handshakes
+
+When sending data without a valid session, the **first handshake** proceeds as follows:
+
+1. Temporarily store the pending data packet in a queue.
+2. Send a handshake message.
+3. When the response arrives, establish the session and send the queued data.
+
+If no response arrives within `Rekey-Timeout`, the handshake is **retried**:
+
+1. Generate **new random keys** and attempt another handshake.
+2. Repeat every five seconds for `Rekey-Attempt-Time`.
+
+## 5. Passive Keepalive
+
+> **Silence is a virtue.**
+
+WireGuard sends nothing when it has no data to send. It uses the following strategy to let a peer determine whether it is still alive:
+
+- The peer sends me data.
+- I have no data to send back.
+- I send an empty packet to say **“I’m still here.”**
+
+This lets the peer distinguish normal silence from a lost connection.

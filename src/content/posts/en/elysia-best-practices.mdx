@@ -1,0 +1,366 @@
+---
+title: '[Best Practices] ElysiaJS'
+description: 'My ElysiaJS best practices, based on personal projects and the official guide: folder structure, service and model layers, context extensions, and database access with Drizzle ORM.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/%5BBest%20Practice%5D%20ElysiaJS%20%ED%8E%B8.png
+publishedAt: '2026-04-05T23:27:50.943435'
+updatedAt: '2026-04-24T20:50:15.995493+00:00'
+topics: ['typescript', 'elysiajs']
+author: 'gymynnym'
+draft: false
+---
+
+# [Best Practices] ElysiaJS
+
+## Introduction
+
+This article documents my own best practices, based on experience using ElysiaJS in personal projects.
+
+It builds on the concepts in the official [Best Practice guide](https://elysiajs.com/essential/best-practice.html), extending them with my own development experience.
+
+## Creating the Project
+
+```bash
+$ bun create elysia <project-name>
+$ cd <project-name>
+
+# optional
+$ bun add -D prettier
+```
+
+Create a project with [`bun create`](https://bun.com/docs/runtime/templating/create), then configure formatters and linters to suit your team’s conventions or personal preferences.
+
+## Folder Structure
+
+> According to [ElysiaJS - Folder Structure](https://elysiajs.com/essential/best-practice.html#folder-structure), ElysiaJS has no prescribed folder structure, so developers can choose their own.
+
+### 1. `src/index.ts`: Entry Point
+
+`src/index.ts` is the project entry point, as you can see in `package.json`:
+
+```json
+{
+  ...
+  "scripts": {
+    ...
+    "dev": "bun run --watch src/index.ts"
+  },
+  ...
+  "module": "src/index.js"
+}
+```
+
+The generated `src/index.ts` looks like this:
+
+```ts
+import { Elysia } from 'elysia';
+
+const app = new Elysia().get('/', () => 'Hello Elysia').listen(3000);
+
+console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
+```
+
+This code:
+
+1. Creates an `Elysia` instance.
+2. Defines a REST API for `GET /`.
+3. Calls `listen` to start the web server.
+
+### 2. `src/modules`: Modules
+
+```
+src
+└── modules
+    ├── auth
+    │   ├── index.ts
+    │   ├── message.ts
+    │   ├── model.ts
+    │   └── service.ts
+    ├── common
+    │   ├── error.ts
+    │   └── model.ts
+    └── user
+        └── repository.ts
+```
+
+I chose a **feature/domain-based structure**. Grouping related code such as services and models in one directory improves cohesion and allows features to grow independently.
+
+Subdirectories under `src/modules` therefore use **feature or domain names**, with files separated into the layers each domain needs.
+
+Common layers include:
+
+- `index`: a modular Elysia app that other apps can attach with `use`.
+- `service`: the module’s service layer, responsible for business logic.
+- `repository`: the module’s database access layer.
+- `model`: data structures and validation for the module.
+- `message`: message constants used by the module.
+
+### 3. `src/plugins`: Plugins
+
+```
+src
+└── plugins
+    ├── database
+    │   ├── index.ts
+    │   └── schema.ts
+    ├── jwt
+    │   ├── index.ts
+    │   └── model.ts
+    └── response
+        ├── index.ts
+        └── utils.ts
+```
+
+Modules hold domain-specific business logic, while plugins provide features and resources shared across modules.
+
+Plugins also use **feature or domain names** for subdirectories. Their `index` files expose modular Elysia apps that other apps can attach with `use`.
+
+### 4. `src/handlers`: Handlers
+
+```
+src
+└── handlers
+    └── error
+        └── index.ts
+```
+
+Handlers handle lifecycle events such as `onRequest` and `onError`, rather than extending context as plugins do.
+
+In this example, `error/index.ts` handles errors through `onError`.
+
+### Aside: Path Aliases
+
+```json
+// tsconfig.json
+{
+  "compilerOptions": {
+    ...
+    "paths": {
+      "@/*": ["./src/*"],
+      "@mo/*": ["./src/modules/*"],
+      "@pl/*": ["./src/plugins/*"]
+    }
+  ...
+}
+```
+
+Configure folder aliases with `paths` in `tsconfig.json` to import modules using absolute aliases rather than relative paths:
+
+```ts
+import { AuthModule } from '../../../modules/auth'; // Before configuration
+import { AuthModule } from '@mo/auth'; // After configuration
+```
+
+## Layers
+
+### 1. Services
+
+ElysiaJS supports two service implementations: [source](https://elysiajs.com/essential/best-practice.html#service).
+
+1. Request-independent services (recommended).
+2. Request-dependent services.
+
+If a service does not directly access request context, a request-independent static class or function is recommended.
+
+An `abstract class + static methods` structure is efficient: it keeps logic stateless and requires dependencies to be injected explicitly.
+
+Here is an example service:
+
+```ts
+interface AuthServiceTool {
+  db: Database;
+  jwt: JWTTool;
+}
+
+export abstract class AuthService {
+  static async join(body: AuthModel.JoinRequest, { db, jwt }: AuthServiceTool) { ... }
+
+  static async login(body: AuthModel.LoginRequest, { db, jwt }: AuthServiceTool) { ... }
+}
+```
+
+I pass a separate `ServiceTool` interface because handling more utility objects individually increases code complexity.
+
+Methods that do not need every tool in `ServiceTool` can use `Omit` or `Pick` to avoid unnecessary resources.
+
+### 2. Models
+
+Elysia supports validation libraries such as `zod` and `Valibot` for models or DTOs, but its TypeBox wrapper `t` is recommended for performance.
+
+```ts
+import { UnwrapSchema, t } from 'elysia';
+
+export namespace AuthModel {
+  const username = t.String({
+    minLength: 3,
+    maxLength: 20,
+    trim: true,
+  });
+  const password = t.String({
+    minLength: 6,
+    maxLength: 32,
+    pattern: '^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{6,}$',
+  });
+  const age = t.Number({
+    minimum: 18,
+    maximum: 120,
+  });
+
+  export const joinRequest = t.Object({ username, password, age });
+  export type JoinRequest = UnwrapSchema<typeof joinRequest>;
+
+  export const loginRequest = t.Object({ username, password });
+  export type LoginRequest = UnwrapSchema<typeof loginRequest>;
+}
+```
+
+Create validation models with `t.Object` and extract their types with `UnwrapSchema<typeof model>`, combining runtime validation with type inference.
+
+Use these models in controllers as follows:
+
+```ts
+...
+  .post(
+    '/join',
+    async ({ body, db, jwt, set, created }) => {
+      const { token } = await AuthService.join(body, { db, jwt });
+      set.headers = { Authorization: `Bearer ${token}` };
+      return created(AuthMessage.JOIN_SUCCESS);
+    },
+    {
+      body: AuthModel.joinRequest,
+      response: {
+        // Automatic type inference
+        201: CommonModel.messageResponse,
+        400: CommonModel.fieldErrorsResponse,
+        409: CommonModel.fieldErrorsResponse,
+      },
+    }
+  )
+...
+```
+
+## Patterns I Use in Practice
+
+### 1. Extending Context
+
+> ElysiaJS’s **context** is an object created for each request. It contains request data such as body, query, params, and headers, along with values added by the application.
+
+`state`, `decorate`, `derive`, and `resolve` all **extend context**.
+
+#### `state`
+
+`state` adds an object available globally across the Elysia app. Its value can change after initialization.
+
+#### `decorate`
+
+`decorate` adds properties to context, typically constants or read-only singleton objects.
+
+> Values can be changed, as with `state`, but doing so is not recommended!
+
+#### `derive`
+
+`derive` creates and adds new properties based on values already in context.
+
+> It does not guarantee type safety, so use `resolve` when that is needed.
+
+#### `resolve`
+
+`resolve` is the type-safe version of `derive`.
+
+It runs after validation in the lifecycle, so request data such as body and headers is type-safe.
+
+In general, `resolve` is therefore recommended over `derive`.
+
+#### Conclusion
+
+I choose context extensions using these guidelines:
+
+- Global values unrelated to individual requests -> `state`.
+- Constants or singletons -> `decorate`.
+- New values derived from existing values -> `resolve`.
+- Rarely used because it lacks guaranteed type safety -> `derive`.
+
+### 2. Accessing the Database Object
+
+Although ElysiaJS is a framework, its emphasis on developer experience means it does not prescribe a strict code style. I consider `decorate` a good pattern for globally used constants or objects.
+
+```ts
+// src/plugins/database/index.ts
+const db = drizzle(...);
+export const DatabasePlugin = new Elysia({ name: 'database' }).decorate('db', db);
+
+// src/modules/auth/index.ts
+export const AuthModule = new Elysia({
+  name: 'auth',
+  prefix: '/auth',
+})
+  ...
+  .use(DatabasePlugin)
+  .post('/join', async ({ db, ... }) => ...)
+```
+
+Instead of simply exporting and importing the database object, I register it with `decorate`, retrieve it in each router, and pass it to the service layer. Including it in `ServiceTool` keeps that handoff tidy.
+
+### 3. Repository Layer with Drizzle ORM
+
+```ts
+import { Database, schema, Transaction } from '@pl/database/schema';
+import { eq } from 'drizzle-orm';
+
+const { user } = schema;
+
+type UserRepositoryClient = Pick<Database, 'select' | 'insert'> | Pick<Transaction, 'select' | 'insert'>;
+
+export class UserRepository {
+  constructor(private readonly db: UserRepositoryClient) {}
+
+  async findByEmail(email: string) {
+    const [foundUser] = await this.db.select().from(user).where(eq(user.email, email));
+    return foundUser;
+  }
+
+  async existsById(id: number) {
+    const [foundUser] = await this.db.select().from(user).where(eq(user.id, id));
+    return !!foundUser;
+  }
+
+  async save(value: typeof user.$inferInsert) {
+    const [savedUser] = await this.db.insert(user).values(value).returning();
+    return savedUser;
+  }
+}
+```
+
+This is a simple User-domain repository using Drizzle ORM. Its constructor receives `db`, which it uses for database operations.
+
+Service methods can create it when needed, as in this example:
+
+```ts
+...
+export abstract class AuthService {
+  static async join(body: AuthModel.JoinRequest, { db, jwt, password }: AuthServiceTool) {
+    return db.transaction(async (tx) => {
+      const userRepository = new UserRepository(tx);
+      const existinguser = await userRepository.findByEmail(body.email);
+      ...
+      const savedUser = await userRepository.save(newUser);
+      ...
+    });
+  }
+...
+}
+```
+
+I do not register UserRepository through `resolve` because some routes in the module may not use it. Doing so would create unnecessary objects and context extensions.
+
+I recommend creating it in the service layer only when needed.
+
+> I thought ElysiaJS’s [Sucrose static analyzer](https://elysiajs.com/internal/jit-compiler.html#static-code-analysis-sucrose) would solve this, but it did not. :(
+
+## Closing Thoughts
+
+ElysiaJS offers a great deal of freedom and excellent DX. That makes establishing a clear structure and conventions early in a project especially important.
+
+Putting my experience into one document over a relaxed weekend helped me clarify the concepts and see my future learning direction more clearly.
+
+Once the best-practices project is complete, I will publish the repository and link it here!

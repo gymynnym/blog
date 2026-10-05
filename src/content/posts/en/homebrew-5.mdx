@@ -1,0 +1,70 @@
+---
+title: 'Concurrent Downloads Have Finally Arrived in Homebrew!'
+description: 'Homebrew 5.0.0 was released on November 12, 2025. Concurrent downloads are now enabled by default, Linux ARM64 support reaches Tier 1, and quarantine flags are deprecated.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/%EB%93%9C%EB%94%94%EC%96%B4%20homebrew%EA%B0%80%20%EB%B3%91%EB%A0%AC%EC%B2%98%EB%A6%AC.png
+publishedAt: '2025-11-19T20:50:53.961740'
+updatedAt: '2025-11-22T17:15:33.850987+00:00'
+topics: ['uncategorized']
+author: 'gymynnym'
+draft: false
+---
+
+# Concurrent Downloads Have Finally Arrived in Homebrew!
+
+**Homebrew 5.0.0** was released on November 12, 2025! 🎉
+
+## What Is Homebrew?
+
+Homebrew is a **package manager** for macOS and Linux.  
+I suspect most developers on macOS use Homebrew, apart from the geeks who use nix.
+
+It resembles `apt` on Debian-based systems or `yum` on Red Hat-based systems, but updates are independent of distribution versions (rolling releases), and it is not the OS’s built-in package manager.  
+Homebrew also provides software through community-maintained formulae and casks rather than relying on the Apple ecosystem.  
+This offers a consistent installation experience that is friendly to developers.
+
+## Changelog
+
+### 1. Concurrent Downloads Become the Default
+
+> `HOMEBREW_DOWNLOAD_CONCURRENCY=auto` is set by default.
+
+Concurrent downloads were already introduced in **Homebrew 4.6.0**.  
+At the time, the feature was experimental and users had to opt in with an environment variable. [Homebrew/brew/pull/20342](https://github.com/Homebrew/brew/pull/20342)  
+The Homebrew team later deemed it stable and enabled concurrent downloads by default in **5.0.0**.
+
+`HOMEBREW_DOWNLOAD_CONCURRENCY` defaults to auto. Setting a number instead specifies how many downloads can run concurrently.
+
+### 2. Linux ARM64/AArch64 Support Promoted to Tier 1
+
+Homebrew supports Linux as well as macOS.  
+This release promotes Linux ARM64/AArch64 support to Tier 1.  
+I have not tried it on Linux yet, but would like to when I get the chance.
+
+### 3. `--no-quarantine` and `--quarantine` Flags Deprecated
+
+On macOS, **Gatekeeper** may block apps from developers without an **Apple Developer license** or require additional approval. Homebrew’s `--no-quarantine` flag was designed to bypass this intrusive Gatekeeper check.
+
+Apparently, the Homebrew team was not fond of this. The flags are now deprecated, with removal planned for September 2026.
+
+![librewolf-installation.png](https://assets.akuk.in/blog/in-content/1763552162764_librewolf-installati.webp 'Installing LibreWolf')
+
+The [LibreWolf installation process](https://librewolf.net/docs/faq/#why-is-librewolf-marked-as-broken) may change. :(
+
+## Aside: Concurrency and Parallelism
+
+> I got confused while writing this article, so I decided to explain it here.
+
+**Concurrency** switches between tasks quickly, making them appear to run at the same time.  
+**Parallelism** runs multiple tasks physically at the same time.
+
+From an implementation perspective:  
+A **single-core CPU** implements concurrency by context-switching between tasks.  
+A **multi-core CPU** implements parallelism by assigning different tasks to different cores, allowing them to run simultaneously.
+
+Using these definitions, we can classify Homebrew’s new download feature as follows.
+
+Downloading several files generally uses concurrency: send multiple requests and briefly alternate between handling responses as they arrive. Homebrew’s feature therefore provides concurrent downloads, with multiple downloads in progress at once. The name itself is “Concurrent Downloads,” after all.
+
+## Closing Thoughts
+
+The little break I take while updating packages after opening my MacBook will probably get shorter. :/

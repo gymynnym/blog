@@ -1,0 +1,64 @@
+---
+title: '基本的な使い方'
+description: '公開IPが192.95.5.69のeth0を持つLinux環境にwg0を追加し、トンネルIPとして10.192.122.3/24を設定します。ipとwgでルーティングやピアを設定する基本手順です。'
+thumbnail: https://assets.akuk.in/blog/thumbnails/WireGuard%20%EB%B0%B1%EC%84%9C%20%EC%89%BD%EA%B2%8C%20%EC%9D%BD%EA%B8%B0.png
+publishedAt: '2025-12-13T17:19:15.208700'
+updatedAt: '2025-12-18T18:36:21.020632'
+topics: ['wireguard']
+series: 'wireguard-whitepaper'
+seriesOrder: 4
+author: 'gymynnym'
+draft: false
+---
+
+# 基本的な使い方
+
+## 前提となる環境
+
+公開IPが**192.95.5.69**の物理ネットワークインターフェース`eth0`一つでインターネットに接続しているLinux環境を想定します。WireGuardインターフェース`wg0`を追加し、トンネルIPとして**10.192.122.3/24**を割り当てます。
+
+## `ip`で`wg0`インターフェースを追加する
+
+```sh
+$ ip link add dev wg0 type wireguard # WireGuardインターフェースwg0を作成
+$ ip address add dev wg0 10.192.122.3/24 # wg0にトンネルIP 10.192.122.3/24を設定
+$ ip route add 10.0.0.0/8 dev wg0 # 10.0.0.0/8をwg0へルーティング
+$ ip address show # 結果を確認
+1: lo: <LOOPBACK> mtu 65536
+   inet 127.0.0.1/8 scope host lo
+2: eth0: <BROADCAST> mtu 1500
+   inet 192.95.5.69/24 scope global eth0
+3: wg0: <POINTOPOINT,NOARP> mtu 1420
+   inet 10.192.122.3/24 scope global wg0
+```
+
+これらのコマンドで、`wg0`というネットワークインターフェースを作成し、IPアドレスとルーティングを設定しました。
+
+## `wg`で暗号鍵ルーティングテーブルを設定する
+
+```sh
+$ wg setconf wg0 configuration-1.conf # 設定ファイルをwg0に適用
+$ wg show wg0 # 適用結果を確認
+interface: wg0
+  public key: HIgo...8ykw
+  private key: yAnz...fBmk
+  listening port: 41414
+peer: xTIB...p8Dg
+  allowed ips: 10.192.124.0/24, 10.192.122.3/32
+peer: TrMv...WXX0
+  allowed ips: 192.168.0.0/16, 10.192.122.4/32
+peer: gN65...z6EA
+  allowed ips: 10.10.10.230/32
+  endpoint: 192.95.5.70:54421
+```
+
+これらのコマンドは、ピア一覧、AllowedIPs、鍵、エンドポイント、ポートなどを定義した`configuration-1.conf`を`wg0`に適用します。
+
+### インターフェースを有効にし、通信を確認する
+
+```sh
+$ ip link set wg0 up # wg0を有効化
+$ ping 10.10.10.230 # 通信を確認
+```
+
+このシステムから**10.10.10.230**へ送信すると、パケットは`wg0`を通ります。`wg0`は公開鍵`gN65...z6EA`に対応するセキュアなセッションでパケットを**暗号化**し、暗号化・カプセル化したパケットをUDPで**192.95.5.70:54421**へ送信します。`wg0`が**10.10.10.230**からパケットを**受信**するとき、管理者は公開鍵`gN65...z6EA`を持つピアから届いたことを保証されます。
