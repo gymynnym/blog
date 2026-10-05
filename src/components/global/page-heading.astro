@@ -1,0 +1,15 @@
+---
+interface Props {
+  title: string;
+  count?: number;
+}
+const { title, count } = Astro.props;
+---
+
+<header class="mb-8">
+  <div class="flex items-baseline justify-between gap-3">
+    <h1 class="font-mono text-2xl font-medium">{title}</h1>
+    {count !== undefined && <span class="text-muted-foreground font-mono text-sm tabular-nums">[{count}]</span>}
+  </div>
+  <slot />
+</header>

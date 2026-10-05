@@ -1,93 +1,170 @@
 ---
 import { Image } from 'astro:assets';
+import { ArrowRight, ArrowUpRight } from '@lucide/astro';
 import githubLogo from '@/assets/icons/logos/github.svg';
 import zennLogo from '@/assets/icons/logos/zenn.svg';
+import PostListItem from '@/components/posts/list-item.astro';
+import ProjectList from '@/components/projects/list.astro';
+import ProjectListItem from '@/components/projects/list-item.astro';
+import { projects } from '@/data/projects';
 import { ui, type Locale } from '@/lib/i18n';
+import { postRoute, publishedPosts } from '@/lib/posts';
+import { postPath, postsPath, projectsPath } from '@/lib/routes';
 
 interface Props {
   locale: Locale;
 }
-
 const { locale } = Astro.props;
-
-const profile = [
-  { label: 'name', value: '박지민(Jimin Park)' },
-  { label: 'username', value: 'gymynnym', href: 'https://github.com/gymynnym' },
-  { label: 'email', value: 'gymynnym@gmail.com', href: 'mailto:gymynnym@gmail.com' },
-  { label: 'country', value: '🇰🇷' },
-  { label: 'interests', value: 'dev, singularity' },
-];
+const labels = ui[locale];
+const posts = await publishedPosts(locale);
+const [featured, ...recent] = posts.slice(0, 4);
 ---
 
-<main class="mx-auto max-w-5xl px-6 py-14 sm:px-8 sm:py-20 lg:py-24">
-  <div class="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(21rem,0.82fr)] lg:items-start lg:gap-12">
-    <section class="lg:py-5" aria-labelledby="home-title">
-      <h1 id="home-title" class="font-mono text-3xl font-medium tracking-tight sm:text-4xl">blog: gymynnym</h1>
-      <p class="text-muted-foreground mt-5 max-w-lg text-base leading-7">{ui[locale].blogDescription}</p>
-
-      <nav class="mt-8 flex flex-wrap gap-2" aria-label="Profile links">
-        <a
-          href="https://github.com/gymynnym"
-          class="bg-foreground text-background flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"
-          target="_blank"
-          rel="me noreferrer"
-        >
-          <Image src={githubLogo} alt="" class="size-4" />
-          GitHub
-        </a>
-        <a
-          href="https://zenn.dev/gymynnym"
-          class="bg-background hover:bg-muted flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
-          target="_blank"
-          rel="me noreferrer"
-        >
-          <Image src={zennLogo} alt="" class="size-5" />
-          Zenn
-        </a>
-      </nav>
+<main class="page-shell">
+  <div class="grid items-center gap-10 pb-12 sm:pb-16 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-20">
+    <section aria-labelledby="home-title">
+      <h1
+        id="home-title"
+        class="max-w-xl text-4xl leading-[1.2] font-semibold tracking-tight text-balance break-keep sm:text-5xl lg:text-6xl"
+      >
+        {labels.homeTitle}
+      </h1>
+      <p class="text-muted-foreground mt-5 max-w-lg text-sm leading-7 sm:text-base">{labels.blogDescription}</p>
+      <a
+        href={postsPath(locale)}
+        class="text-foreground hover:bg-muted focus-visible:outline-foreground mt-7 inline-flex min-h-10 items-center gap-3 rounded-md border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4"
+        >{labels.allPosts}<ArrowRight class="size-4" aria-hidden="true" /></a
+      >
     </section>
 
-    <section
-      class="group bg-card hover:bg-muted/20 overflow-hidden rounded-lg border transition-colors"
-      aria-labelledby="whoami-title"
-    >
-      <div class="bg-muted/20 flex h-10 items-center border-b px-4" aria-hidden="true">
-        <div class="flex gap-1.5">
-          <span class="bg-border size-2.5 rounded-full"></span>
-          <span class="bg-border size-2.5 rounded-full"></span>
-          <span class="bg-border size-2.5 rounded-full"></span>
+    <aside class="rounded-lg border" aria-labelledby="whoami-title">
+      <div class="bg-muted/40 flex items-center justify-between border-b px-5 py-3">
+        <h2 id="whoami-title" class="text-muted-foreground font-mono text-xs">$ whoami</h2>
+        <span class="text-muted-foreground font-mono text-xs" aria-hidden="true">~/blog</span>
+      </div>
+      <div class="p-5">
+        <div class="flex items-center gap-3">
+          <img
+            src="https://avatars.githubusercontent.com/u/118962415?v=4"
+            alt=""
+            width="44"
+            height="44"
+            class="size-11 rounded-full"
+          />
+          <div>
+            <p class="font-medium">
+              박지민 <span class="text-muted-foreground text-sm font-normal">Jimin Park</span>
+            </p><p class="text-muted-foreground mt-0.5 font-mono text-xs">@gymynnym</p>
+          </div>
         </div>
-      </div>
-
-      <div class="p-5 font-mono">
-        <h2 id="whoami-title" class="text-sm font-medium">
-          <span class="text-muted-foreground mr-2" aria-hidden="true">$</span>whoami
-        </h2>
-
-        <dl class="mt-5 space-y-2 text-sm leading-6">
-          {
-            profile.map(({ label, value, href }) => (
-              <div class="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3">
-                <dt class="text-muted-foreground">{label}:</dt>
-                <dd class="min-w-0 font-medium">
-                  {href ? (
-                    <a
-                      href={href}
-                      class="decoration-muted-foreground/60 hover:text-muted-foreground wrap-break-word transition-colors hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
-                      target={href.startsWith('http') ? '_blank' : undefined}
-                      rel={href.startsWith('http') ? 'noreferrer' : undefined}
-                    >
-                      {value}
-                    </a>
-                  ) : (
-                    value
-                  )}
-                </dd>
-              </div>
-            ))
-          }
+        <dl class="mt-5 space-y-2 font-mono text-xs leading-6">
+          <div class="flex gap-2">
+            <dt class="text-muted-foreground w-20 shrink-0">based in</dt><dd>🇰🇷 Seoul / Asia</dd>
+          </div>
+          <div class="flex gap-2">
+            <dt class="text-muted-foreground w-20 shrink-0">interests</dt><dd>dev, singularity</dd>
+          </div>
+          <div class="flex gap-2">
+            <dt class="text-muted-foreground w-20 shrink-0">email</dt><dd class="min-w-0">
+              <a class="underline-offset-4 hover:underline" href="mailto:gymynnym@gmail.com">gymynnym@gmail.com</a>
+            </dd>
+          </div>
         </dl>
+        <nav class="mt-5 grid grid-cols-2 gap-2 border-t pt-4" aria-label="Profile links">
+          <a
+            href="https://github.com/gymynnym"
+            class="bg-foreground text-background flex min-h-10 items-center justify-center gap-2 rounded-md text-xs font-medium transition-opacity hover:opacity-80"
+            target="_blank"
+            rel="me noreferrer"
+            ><Image src={githubLogo} alt="" class="size-3.5" />GitHub <ArrowUpRight
+              class="size-3"
+              aria-hidden="true"
+            /></a
+          >
+          <a
+            href="https://zenn.dev/gymynnym"
+            class="hover:bg-muted flex min-h-10 items-center justify-center gap-2 rounded-md border text-xs font-medium transition-colors"
+            target="_blank"
+            rel="me noreferrer"
+            ><Image src={zennLogo} alt="" class="size-4" />Zenn <ArrowUpRight class="size-3" aria-hidden="true" /></a
+          >
+        </nav>
       </div>
-    </section>
+    </aside>
   </div>
+
+  <section aria-labelledby="recent-title" class="border-t pt-8 sm:pt-10">
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-2">
+      <h2 id="recent-title" class="text-xl font-semibold tracking-tight">
+        {labels.latestPosts}<span class="text-muted-foreground ml-3 font-mono text-xs font-normal">/ posts</span>
+      </h2>
+      <a href={postsPath(locale)} class="text-link">{labels.allPosts}<ArrowRight class="size-4" aria-hidden="true" /></a
+      >
+    </div>
+    {
+      featured ? (
+        <>
+          <a
+            href={postPath(locale, postRoute(featured).slug)}
+            class="group relative isolate flex min-h-80 overflow-hidden rounded-lg bg-neutral-950 px-6 py-8 text-white sm:min-h-96 sm:p-10"
+          >
+            {featured.data.thumbnail && (
+              <img
+                src={featured.data.thumbnail}
+                alt=""
+                class="absolute inset-0 -z-20 size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                fetchpriority="high"
+              />
+            )}
+            <div
+              class="absolute inset-0 -z-10 bg-linear-to-t from-black/95 via-black/65 to-black/25"
+              aria-hidden="true"
+            />
+            <div class="flex w-full flex-col justify-end">
+              <div class="flex items-end justify-between gap-6">
+                <div class="max-w-2xl">
+                  <>
+                    <h3 class="text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl">
+                      {featured.data.title}
+                    </h3>
+                    <p class="mt-4 line-clamp-2 max-w-xl text-sm leading-7 text-white/75">
+                      {featured.data.description}
+                    </p>
+                    <span class="mt-6 inline-flex items-center gap-2 text-sm">
+                      {labels.readPost}
+                      <ArrowRight class="size-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                    </span>
+                  </>
+                </div>
+                <ArrowUpRight class="hidden size-8 shrink-0 opacity-60 sm:block" aria-hidden="true" />
+              </div>
+            </div>
+          </a>
+          {recent.length > 0 && (
+            <ul class="mt-8 grid gap-7 sm:grid-cols-2 lg:grid-cols-3">
+              {recent.map((post) => (
+                <PostListItem post={post} locale={locale} compact />
+              ))}
+            </ul>
+          )}
+        </>
+      ) : (
+        <p class="empty-state">{labels.noPosts}</p>
+      )
+    }
+  </section>
+
+  <section aria-labelledby="projects-title" class="mt-14 border-t pt-8 sm:mt-20 sm:pt-10">
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-2">
+      <h2 id="projects-title" class="text-xl font-semibold tracking-tight">
+        {labels.projects}<span class="text-muted-foreground ml-3 font-mono text-xs font-normal">/ projects</span>
+      </h2>
+      <a href={projectsPath(locale)} class="text-link"
+        >{labels.allProjects}<ArrowRight class="size-4" aria-hidden="true" /></a
+      >
+    </div>
+    <ProjectList
+      >{projects.map((project) => <ProjectListItem project={project} locale={locale} headingTag="h3" />)}</ProjectList
+    >
+  </section>
 </main>

@@ -7,23 +7,26 @@ import TopicBadge from '@/components/topics/badge.astro';
 interface Props {
   project: Project;
   locale: Locale;
+  headingTag?: 'h2' | 'h3';
 }
 
-const { project, locale } = Astro.props;
+const { project, locale, headingTag: Heading = 'h2' } = Astro.props;
 ---
 
 <li
   data-topics={project.topics.map((topic) => topic.slug).join(' ')}
-  class="group bg-card hover:bg-muted/20 flex min-h-64 flex-col rounded-lg border p-5 transition-colors"
+  class="group bg-card hover:bg-muted/20 flex min-h-72 flex-col rounded-lg border p-6 transition-colors sm:p-7"
 >
   <div class="flex items-start justify-between gap-4">
     <div class="flex flex-wrap items-center gap-2">
-      <span class="text-muted-foreground rounded-sm border px-2 py-0.5 font-mono text-xs">
+      <span
+        class="text-muted-foreground inline-flex min-h-6 items-center rounded-sm border px-2 py-0.5 font-mono text-xs"
+      >
         {project.type}
       </span>
       {
         project.archived && (
-          <span class="rounded-sm border border-yellow-300 bg-yellow-50 px-2 py-0.5 font-mono text-xs text-yellow-900 dark:border-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-200">
+          <span class="inline-flex min-h-6 items-center rounded-sm border border-yellow-300 bg-yellow-50 px-2 py-0.5 font-mono text-xs text-yellow-900 dark:border-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-200">
             archived
           </span>
         )
@@ -31,7 +34,7 @@ const { project, locale } = Astro.props;
     </div>
     <a
       href={project.href}
-      class="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 py-0.5 font-mono text-xs transition-colors"
+      class="text-muted-foreground hover:text-foreground flex min-h-8 shrink-0 items-center gap-1 font-mono text-xs transition-colors"
       target="_blank"
       rel="noreferrer"
       aria-label={`View ${project.name} source on GitHub`}
@@ -42,16 +45,16 @@ const { project, locale } = Astro.props;
   </div>
 
   <div class="mt-8">
-    <h3>
+    <Heading>
       <a
         href={project.href}
-        class="hover:text-muted-foreground font-mono text-xl font-medium tracking-tight transition-colors"
+        class="hover:text-muted-foreground font-mono text-2xl font-medium tracking-tight transition-colors"
         target="_blank"
         rel="noreferrer"
       >
         {project.name}
       </a>
-    </h3>
+    </Heading>
     <p class="text-muted-foreground mt-3 text-sm leading-6">{project.description[locale]}</p>
   </div>
 

@@ -127,3 +127,23 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer base {
+  [hidden] {
+    display: none !important;
+  }
+}
+
+@layer components {
+  .page-shell {
+    @apply mx-auto w-full max-w-6xl px-6 py-12 sm:px-8 sm:py-16 lg:py-20;
+  }
+
+  .text-link {
+    @apply hover:text-muted-foreground inline-flex min-h-10 items-center gap-2 text-sm font-medium transition-colors;
+  }
+
+  .empty-state {
+    @apply text-muted-foreground rounded-lg border border-dashed px-6 py-16 text-center text-sm leading-7;
+  }
+}

@@ -1,9 +1,10 @@
 ---
 import { Image } from 'astro:assets';
+import { Check, ChevronDown } from '@lucide/astro';
 import jpFlag from '@/assets/icons/flags/jp.svg';
 import krFlag from '@/assets/icons/flags/kr.svg';
 import usFlag from '@/assets/icons/flags/us.svg';
-import { locales, type LanguageLinks, type Locale } from '@/lib/i18n';
+import { locales, ui, type LanguageLinks, type Locale } from '@/lib/i18n';
 import { homePath, postsPath, projectsPath } from '@/lib/routes';
 
 interface Props {
@@ -30,24 +31,27 @@ const currentSection = navLinks.find(
 )?.name;
 ---
 
-<header class="bg-background absolute top-0 z-50 h-14 w-full border-b font-mono">
-  <div class="container mx-auto flex h-14 items-center gap-4 px-8">
-    <h1>
+<header class="bg-background relative z-50 h-14 w-full shrink-0 border-b font-mono">
+  <div class="mx-auto flex h-14 max-w-6xl items-center gap-4 px-6 sm:px-8">
+    <div>
       <a href={homePath(locale)} class="flex h-14 items-center gap-2" aria-label="gymynnym blog home">
-        <img src="https://avatars.githubusercontent.com/u/118962415" alt="" class="size-6" />
+        <img src="https://avatars.githubusercontent.com/u/118962415" alt="" class="size-6" width="24" height="24" />
         <span class="bg-secondary hidden h-4 w-0.5 sm:block" aria-hidden="true"></span>
         <span class="hidden font-medium sm:inline">blog</span>
       </a>
-    </h1>
-    <nav class="ml-auto flex items-center gap-4 text-sm">
+    </div>
+    <nav class="ml-auto flex h-full items-center gap-5 text-sm sm:gap-7" aria-label="Main">
       {
         navLinks.map(({ name, href }) => (
           <a
             href={href}
             aria-current={currentSection === name ? 'page' : undefined}
             class:list={[
-              'hover:text-muted-foreground transition-colors',
-              { 'underline decoration-1 underline-offset-4': currentSection === name },
+              'hover:text-foreground relative flex h-14 items-center transition-colors',
+              currentSection === name ? 'text-foreground' : 'text-muted-foreground',
+              {
+                'after:bg-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-px': currentSection === name,
+              },
             ]}
           >
             {name}
@@ -55,11 +59,15 @@ const currentSection = navLinks.find(
         ))
       }
       <details class="relative">
-        <summary class="flex cursor-pointer list-none items-center gap-2 uppercase">
+        <summary
+          class="hover:bg-muted flex h-7 cursor-pointer list-none items-center gap-1 rounded-sm px-1 text-xs uppercase transition-colors"
+          aria-label={ui[locale].languages}
+        >
           <Image src={flagIcons[locale]} alt="" class="size-4 object-cover" />
           {locale}
+          <ChevronDown class="text-muted-foreground size-3" aria-hidden="true" />
         </summary>
-        <ul class="bg-background absolute top-full right-0 z-10 mt-2 min-w-24 border p-1">
+        <ul class="bg-background absolute top-full right-0 z-10 mt-2 min-w-24 rounded-md border p-1 shadow-lg">
           {
             locales.map((language) => (
               <li>
@@ -68,12 +76,13 @@ const currentSection = navLinks.find(
                   data-language-link
                   aria-current={language === locale ? 'page' : undefined}
                   class:list={[
-                    'hover:bg-muted flex items-center gap-2 px-2 py-1.5 uppercase transition-colors',
+                    'hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs uppercase transition-colors',
                     { 'font-semibold': language === locale },
                   ]}
                 >
                   <Image src={flagIcons[language]} alt="" class="size-4 object-cover" />
                   {language}
+                  {language === locale && <Check class="ml-auto size-3.5" aria-hidden="true" />}
                 </a>
               </li>
             ))
@@ -85,6 +94,16 @@ const currentSection = navLinks.find(
 </header>
 
 <script>
+  const menu = document.querySelector<HTMLDetailsElement>('header details');
+  document.addEventListener('click', (event) => {
+    if (event.target instanceof Node && !menu?.contains(event.target)) menu?.removeAttribute('open');
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && menu?.open) {
+      menu.open = false;
+      menu.querySelector('summary')?.focus();
+    }
+  });
   if (window.location.search) {
     for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-language-link]')) {
       const url = new URL(link.href);

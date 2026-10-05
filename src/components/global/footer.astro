@@ -1,0 +1,38 @@
+---
+import { ArrowUpRight, Rss } from '@lucide/astro';
+import { ui, type Locale } from '@/lib/i18n';
+import { feedPath, homePath } from '@/lib/routes';
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+---
+
+<footer class="mt-auto border-t">
+  <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-8 gap-y-3 px-6 py-7 sm:px-8">
+    <a href={homePath(locale)} class="text-muted-foreground hover:text-foreground font-mono text-xs transition-colors"
+      >blog: gymynnym</a
+    >
+    <nav
+      class="text-muted-foreground flex flex-wrap items-center gap-x-5 gap-y-1 text-xs"
+      aria-label={ui[locale].contact}
+    >
+      <a
+        href="https://github.com/gymynnym"
+        target="_blank"
+        rel="me noreferrer"
+        class="hover:text-foreground inline-flex min-h-10 items-center gap-1 transition-colors"
+        >GitHub <ArrowUpRight class="size-3" aria-hidden="true" /></a
+      >
+      <a
+        href="mailto:gymynnym@gmail.com"
+        class="hover:text-foreground inline-flex min-h-10 items-center transition-colors">gymynnym@gmail.com</a
+      >
+      <a
+        href={feedPath(locale)}
+        class="hover:text-foreground inline-flex min-h-10 items-center gap-1.5 transition-colors"
+        ><Rss class="size-3" aria-hidden="true" /> RSS</a
+      >
+    </nav>
+  </div>
+</footer>

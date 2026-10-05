@@ -4,6 +4,9 @@ import type { CollectionEntry } from 'astro:content';
 import PostList from '@/components/posts/list.astro';
 import PostListItem from '@/components/posts/list-item.astro';
 import GlobalLayout from '@/layouts/global.astro';
+import PageHeading from '@/components/global/page-heading.astro';
+import { ArrowLeft } from '@lucide/astro';
+import { postsPath } from '@/lib/routes';
 import { locales, ui, type LanguageLinks, type Locale } from '@/lib/i18n';
 import { publishedPosts } from '@/lib/posts';
 import { seriesPath } from '@/lib/routes';
@@ -39,12 +42,15 @@ const labels = ui[lang];
 ---
 
 <GlobalLayout title={series.data.name[lang]} locale={lang} languageLinks={languageLinks}>
-  <main>
-    {series.data.thumbnail && <img src={series.data.thumbnail} alt={series.data.name[lang]} />}
-    <h1>{labels.series}: {series.data.name[lang]}</h1>
+  <main class="page-shell">
+    <PageHeading title={series.data.name[lang]} count={posts.length}
+      ><a href={postsPath(lang)} class="text-link mt-4"
+        ><ArrowLeft class="size-4" aria-hidden="true" />{labels.backToPosts}</a
+      ></PageHeading
+    >
     {
       posts.length === 0 ? (
-        <p>{labels.noPosts}</p>
+        <p class="empty-state">{labels.noPosts}</p>
       ) : (
         <PostList>
           {posts.map((post) => (

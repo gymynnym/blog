@@ -17,7 +17,7 @@ const { locale } = Astro.props;
         hidden
         href=""
         title={ui[locale].clearFilter}
-        class="bg-background/20 hover:bg-muted/20 hover:text-muted-foreground flex items-center gap-1 rounded-sm border px-1 py-1 text-sm backdrop-blur-md transition-colors"
+        class="bg-muted hover:bg-accent flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors"
       >
         {key === 'series' && <Layers class="size-5 shrink-0" aria-hidden="true" />}
         <span data-filter-value />
@@ -27,7 +27,7 @@ const { locale } = Astro.props;
   }
 </div>
 
-<p data-topic-filter-empty hidden class="text-muted-foreground py-8 text-sm">
+<p data-topic-filter-empty hidden class="empty-state">
   {ui[locale].noFilterResults}
 </p>
 

@@ -1,5 +1,6 @@
 ---
 import GlobalLayout from '@/layouts/global.astro';
+import PageHeading from '@/components/global/page-heading.astro';
 import PostList from '@/components/posts/list.astro';
 import PostListItem from '@/components/posts/list-item.astro';
 import TopicFilter from '@/components/topics/filter.astro';
@@ -18,13 +19,13 @@ const labels = ui[lang];
 ---
 
 <GlobalLayout title={labels.posts} locale={lang} languageLinks={languageLinks}>
-  <main class="mx-auto max-w-6xl space-y-8 p-8">
-    <h2 class="font-mono text-2xl font-medium">posts:</h2>
-    <TopicFilter locale={lang} />
-    <section>
+  <main class="mx-auto max-w-6xl p-8">
+    <PageHeading title="posts:" count={posts.length} />
+    <div class="mb-6"><TopicFilter locale={lang} /></div>
+    <section aria-label={labels.posts}>
       {
         posts.length === 0 ? (
-          <p>{labels.noPosts}</p>
+          <p class="empty-state">{labels.noPosts}</p>
         ) : (
           <PostList>
             {posts.map((post) => (

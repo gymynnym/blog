@@ -1,6 +1,7 @@
 ---
 import { projects } from '@/data/projects';
-import type { Locale } from '@/lib/i18n';
+import { ui, type Locale } from '@/lib/i18n';
+import PageHeading from '@/components/global/page-heading.astro';
 import TopicFilter from '@/components/topics/filter.astro';
 import ProjectList from '@/components/projects/list.astro';
 import ProjectListItem from '@/components/projects/list-item.astro';
@@ -12,12 +13,12 @@ interface Props {
 const { locale } = Astro.props;
 ---
 
-<main class="mx-auto max-w-6xl space-y-8 p-8">
-  <h2 class="font-mono text-2xl font-medium">projects:</h2>
+<main class="mx-auto max-w-6xl p-8">
+  <PageHeading title="projects:" count={projects.length} />
 
-  <TopicFilter locale={locale} />
+  <div class="mb-6"><TopicFilter locale={locale} /></div>
 
-  <section aria-label="Project list">
+  <section aria-label={ui[locale].projects}>
     <ProjectList>
       {projects.map((project) => <ProjectListItem project={project} locale={locale} />)}
     </ProjectList>

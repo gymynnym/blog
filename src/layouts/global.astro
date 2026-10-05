@@ -1,7 +1,8 @@
 ---
 import '@/styles/global.css';
 import GlobalHeader from '@/components/global/header.astro';
-import { localeFromPath, type LanguageLinks, type Locale } from '@/lib/i18n';
+import GlobalFooter from '@/components/global/footer.astro';
+import { localeFromPath, ui, type LanguageLinks, type Locale } from '@/lib/i18n';
 import { feedPath } from '@/lib/routes';
 
 interface Props {
@@ -37,8 +38,14 @@ const documentTitle = title ? `${title} | gymynnym` : 'gymynnym | blog';
     }
     <title>{documentTitle}</title>
   </head>
-  <body class="bg-background text-foreground pt-14">
+  <body class="bg-background text-foreground flex min-h-svh flex-col">
+    <a
+      href="#main-content"
+      class="bg-foreground text-background fixed top-3 left-3 z-[100] -translate-y-20 rounded-md px-4 py-3 text-sm focus:translate-y-0"
+      >{ui[locale].skipToContent}</a
+    >
     <GlobalHeader locale={locale} languageLinks={languageLinks} />
-    <slot />
+    <div id="main-content" class="flex-1" tabindex="-1"><slot /></div>
+    <GlobalFooter locale={locale} />
   </body>
 </html>

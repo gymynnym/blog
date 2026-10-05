@@ -9,7 +9,7 @@ interface Props {
   locale: Locale;
 }
 
-const { thumbnail, title, headings, locale } = Astro.props;
+const { thumbnail, headings, locale } = Astro.props;
 const sectionHeadings = headings.filter(({ depth }) => depth > 1);
 const topDepth = Math.min(...sectionHeadings.map(({ depth }) => depth));
 const toc = sectionHeadings.filter(({ depth }) => depth === topDepth);
@@ -18,8 +18,8 @@ const toc = sectionHeadings.filter(({ depth }) => depth === topDepth);
 <section
   data-post-hero
   class:list={[
-    'relative isolate min-h-[calc(100svh-3.5rem)] overflow-clip [clip-path:inset(0)]',
-    thumbnail ? 'text-white' : 'bg-foreground text-background',
+    'relative isolate min-h-[calc(100svh-3.5rem)] overflow-clip bg-neutral-950 [clip-path:inset(0)]',
+    'text-white',
   ]}
 >
   {
@@ -31,13 +31,13 @@ const toc = sectionHeadings.filter(({ depth }) => depth === topDepth);
           class="fixed inset-0 -z-10 h-svh w-full scale-105 object-cover blur-sm"
           aria-hidden="true"
         />
-        <div class="absolute inset-0 bg-black/40" />
+        <div class="absolute inset-0 bg-linear-to-b from-black/60 via-black/65 to-black/80" />
       </>
     )
   }
 
   <div
-    class="relative mx-auto flex min-h-[calc(100svh-3.5rem)] max-w-5xl flex-col items-center justify-center gap-10 px-6 py-16"
+    class="relative mx-auto flex min-h-[calc(100svh-3.5rem)] max-w-5xl flex-col items-center justify-center gap-10 px-6 pt-14 pb-24 sm:px-8 sm:pt-20 sm:pb-28"
   >
     <slot />
 
@@ -46,11 +46,14 @@ const toc = sectionHeadings.filter(({ depth }) => depth === topDepth);
         <nav aria-label={ui[locale].contents} class="w-full max-w-2xl text-sm sm:text-base">
           <ol class="space-y-2">
             {toc.map((heading, index) => (
-              <li class="flex items-baseline gap-2">
-                <span>[{index + 1}]</span>
-                <span class="grow border-b border-dotted border-current opacity-70" />
-                <a href={`#${heading.slug}`} class="transition-opacity hover:opacity-70">
-                  {heading.text}
+              <li>
+                <a
+                  href={`#${heading.slug}`}
+                  class="flex min-h-8 items-baseline gap-3 transition-opacity hover:opacity-70"
+                >
+                  <span class="shrink-0 font-mono text-xs opacity-65">[{index + 1}]</span>
+                  <span class="grow border-b border-dotted border-current opacity-30" aria-hidden="true" />
+                  <span class="max-w-[80%] text-right leading-6 text-balance">{heading.text}</span>
                 </a>
               </li>
             ))}
@@ -60,7 +63,7 @@ const toc = sectionHeadings.filter(({ depth }) => depth === topDepth);
     }
   </div>
 
-  <p class="absolute right-6 bottom-6 z-10 text-sm">
+  <p class="absolute right-6 bottom-6 z-10 font-mono text-xs text-white/70">
     {ui[locale].writtenBy}{' '}
     <a
       href="https://github.com/gymynnym"
