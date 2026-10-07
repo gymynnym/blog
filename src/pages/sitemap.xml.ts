@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { locales, type LanguageLinks, type Locale } from '@/lib/i18n';
 import { postRoute, publishedPosts, translationLinks } from '@/lib/posts';
-import { homePath, postPath, postsPath, projectsPath, topicPath } from '@/lib/routes';
+import { homePath, postPath, postsPath, projectsPath, seriesPagePath, topicPath } from '@/lib/routes';
 
 interface SitemapEntry {
   path: string;
@@ -55,7 +55,7 @@ export const GET: APIRoute = async ({ site }) => {
       .flatMap((topic) => localizedPages((locale) => topicPath(locale, topic.data.slug))),
     ...series
       .filter((item) => usedSeriesIds.has(item.id))
-      .flatMap((item) => localizedPages((locale) => `${postsPath(locale)}/series/${item.data.slug}`)),
+      .flatMap((item) => localizedPages((locale) => seriesPagePath(locale, item.data.slug))),
   ];
 
   const absoluteUrl = (path: string) => escapeXml(new URL(path, site).href);

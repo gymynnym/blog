@@ -34,7 +34,7 @@ const documentTitle = title ? `${title} | gymynnym` : 'gymynnym | blog';
     {
       languageLinks &&
         Object.entries(languageLinks).map(([language, href]) => (
-          <link rel="alternate" hreflang={language} href={href} />
+          <link rel="alternate" hreflang={language} href={new URL(href, Astro.site ?? Astro.url).href} />
         ))
     }
     <title>{documentTitle}</title>

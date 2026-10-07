@@ -9,7 +9,7 @@ import { ArrowLeft } from '@lucide/astro';
 import { postsPath } from '@/lib/routes';
 import { locales, ui, type LanguageLinks, type Locale } from '@/lib/i18n';
 import { publishedPosts } from '@/lib/posts';
-import { seriesPath } from '@/lib/routes';
+import { seriesPagePath } from '@/lib/routes';
 
 export async function getStaticPaths() {
   const posts = await publishedPosts();
@@ -36,7 +36,7 @@ const posts = (await publishedPosts(lang))
   .filter((post) => post.data.series?.id === series.id)
   .sort((a, b) => (a.data.seriesOrder ?? 0) - (b.data.seriesOrder ?? 0));
 const languageLinks = Object.fromEntries(
-  locales.map((locale) => [locale, seriesPath(locale, series.data.slug)]),
+  locales.map((locale) => [locale, seriesPagePath(locale, series.data.slug)]),
 ) as LanguageLinks;
 const labels = ui[lang];
 ---
