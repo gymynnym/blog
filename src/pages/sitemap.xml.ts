@@ -58,7 +58,7 @@ export const GET: APIRoute = async ({ site }) => {
       .flatMap((item) => localizedPages((locale) => seriesPagePath(locale, item.data.slug))),
   ];
 
-  const absoluteUrl = (path: string) => escapeXml(new URL(path, site).href);
+  const absoluteUrl = (path: string) => escapeXml(new URL(path.endsWith('/') ? path : `${path}/`, site).href);
   const urls = entries
     .sort((a, b) => a.path.localeCompare(b.path))
     .map(({ path, lastmod, languageLinks }) => {
