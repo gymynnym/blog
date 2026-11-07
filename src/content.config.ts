@@ -3,6 +3,10 @@ import { file, glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 
 const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+const postDate = z
+  .string()
+  .endsWith('+09:00', '날짜는 UTC+9(+09:00)를 명시한 문자열로 작성해야 합니다.')
+  .pipe(z.coerce.date());
 const localizedName = z.object({
   ko: z.string().min(1),
   en: z.string().min(1),
@@ -33,8 +37,8 @@ const posts = defineCollection({
       description: z.string().min(1),
       author: z.string().min(1).optional(),
       thumbnail: z.url().optional(),
-      publishedAt: z.coerce.date(),
-      updatedAt: z.coerce.date().optional(),
+      publishedAt: postDate,
+      updatedAt: postDate.optional(),
       topics: z.array(reference('topics')).min(1),
       series: reference('series').optional(),
       seriesOrder: z.number().int().positive().optional(),

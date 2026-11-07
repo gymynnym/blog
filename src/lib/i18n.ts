@@ -106,5 +106,6 @@ export function localeFromPath(pathname: string): Locale {
 export function formatDate(value: Date, locale: Locale): string {
   return new Intl.DateTimeFormat(dateLocales[locale], {
     dateStyle: 'long',
+    timeZone: 'Asia/Seoul',
   }).format(value);
 }
