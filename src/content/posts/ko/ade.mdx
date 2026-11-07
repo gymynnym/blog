@@ -1,0 +1,178 @@
+---
+title: 'ADE 둘러보기'
+description: '이번 포스트에서는 ADE를 도입하기 위해서 여러 ADE를 직접 테스트/활용/검증해보면서 얻은 인사이트와 경험을 공유합니다.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/ADE_%20%E1%84%83%E1%85%AE%E1%86%AF%E1%84%85%E1%85%A5%E1%84%87%E1%85%A9%E1%84%80%E1%85%B5.png
+publishedAt: '2026-11-07T22:39:40+09:00'
+updatedAt: '2026-11-08T07:39:40.858655+09:00'
+topics: ['orca', 'herdr']
+author: 'gymynnym'
+draft: false
+---
+
+# ADE 둘러보기
+
+## 들어가며
+
+최근, 개발을 하면서 직접 코드를 작성하는 것보단, AI Agent를 사용하여 개발하는 일이 많아졌습니다. 당장 [GitHub Trending](https://github.com/trending)만 봐도 AI Agent 또는 바이브 코딩으로 개발된 프로젝트들이 대부분입니다.
+
+> 블로그 글을 작성할 떄는, 제(사람)가 직접 작성합니다!!!
+
+저는 저번달까지만 해도, 개인적으로 개발할 때는 Neovim, 업무적으로는 VSCode를 사용하며 동시에 외부 터미널 앱에서 AI Agent들을 따로 띄워 사용했었습니다. 이런 환경에서 계속 개발을 하다보니 IDE, 터미널, 브라우저, 슬랙, 기타 업무 프로그램 간의 창 이동을 하고 있는 제가 너무 비효율적이게 업무를 처리하고 있는 게 아닌가? 라는 의문이 생겼습니다.
+
+저는 이 문제를 해결하기 위해 macOS 환경에서는 [Aerospace](https://github.com/nikitabobko/AeroSpace) Windows 환경에서는 GlazeWM(https://github.com/glzr-io/glazewm)와 같은 타일링 윈도우 매니저를 통해 조금 더 간편한 창 이동 환경을 구축했습니다. 하지만, 애초에 창 이동을 하지 않아도 되는 환경이 더 좋은 선택하닐까? 라는 호기심에 얼마 전부터 흥미가 있던 ADE를 도입하였으며, 이는 성공적으로 제 개발 환경을 효율적이게 만들었습니다.
+
+> ADE란: **IDE(Integrated Development Environment)** 는 개발자가 직접 코드를 작성하고 디버깅하는 데 초점을 맞췄다면, **ADE(Agentic Development Environment)** 란 AI 에이전트 중심으로 개발하기 위한 환경입니다.
+
+이번 포스트에서는 ADE를 도입하기 위해서 여러 ADE를 직접 테스트/활용/검증해보면서 얻은 인사이트와 경험을 공유합니다.
+
+## 1. Orca
+
+![Orca](https://assets.akuk.in/blog/in-content/orca.jpg 'https://github.com/stablyai/orca')
+
+### 첫 ADE
+
+저는 첫 ADE로 Orca를 골랐습니다. 그 이유로는 처음 경험하는 ADE인 만큼, 가장 메이저하고 IDE의 기능을 모두 포함했으면 하는 마음에 맥시멈한 기능을 원했기 때문입니다. 또한 무려 도입 당시 약 90,000 GitHub Star를 보유했었습니다!
+
+ADE를 실제로 사용해보니, 다음과 같은 기능들에서 편리함을 느꼈습니다:
+
+- Project/Worktree 별로, AI Agent들이 시각화 되어 구분된다.
+  - 병렬로 AI Agent들을 돌리고 있을 때, 장점이 부각됨.
+- AI Agent들의 작업이 끝나면, 알림이 온다.
+  - 작업이 완료되었나 터미널 창을 이동하면서 확인하는 창 이동이 줄음.
+- 외부 서버의 AI Agent 통합이 편리하다.
+
+이외에도 회사 업무 중에는 Windows 환경이 강제되어 WSL을 사용하는데, WSL에 대한 지원이 아주 매끄러웠습니다! 추후 등장할 다른 ADE에서의 WSL 환경 통합 과정은 정말 험난합니다...
+
+### 모바일 릴레이
+
+![Orca Mobile](https://assets.akuk.in/blog/in-content/orca-mobile.webp)
+
+Orca에는 공식 모바일 앱이 존재하며, 다른 Orca 데스크탑 앱들과 동기화되며, 작업 현황 확인이 가능합니다. 또한, 모바일에서 직접 터미널 환경을 그대로 확인 및 사용할 수 있습니다!
+
+모바일 릴레이를 위해 페어링하는 과정은 Tailscale을 이용하는 방법과 Orca Relay를 사용하는 두가지 방식이 있으며, 저는 굳이 Tailscale에 연결하지 않아도 사용 가능한 Orca Relay를 사용하는 방식으로 진행했습니다. 이 흐름 또한 단순 로그인 후 QR 코드를 인식만 하면 되는 구조라 아주 매끄러웠습니다.
+
+### 난관: 너무 많은 기능으로 인한 성능 저하
+
+저는 일주일 간 Orca를 테스트하면서, 새로운 기능들이 추가되면 직접 사용해보면서 이것저것 사용하는 기능들을 늘려갔습니다(이떄 거의 하루에 한번씩 메이저 업데이트 급의 기능들이 추가되는 느낌이었습니다).
+
+이때까지만 해도 저는 개발팀 팀원분들에게도 Orca를 전도하며, 아주 만족하고 있었습니다. 다만, 점점 기능이 추가되면 추가될 수록 Orca 앱이 차지하는 컴퓨팅 리소스가 많아졌으며, 급기야 WSL이 셧다운되거나 AI Agent의 작업이 프리징되는 상황이 자주 발생했습니다. 저뿐만이 아니라 다른 팀원분들도 같은 현상이 발생했습니다.
+
+### 총평
+
+결국, IDE 사용은 하지 않게되었지만 너무 자주 발생하는 크래쉬에 Orca 사용은 포기하고 더 가볍고 필요한 기능만 있는 ADE 탐색을 시작했습니다.
+
+## 2. Herdr
+
+### 신나는 탐색 과정
+
+Monocode, Emdash 등 여러 ADE를 탐색/직접 시도해보던 중, Herdr가 제 개발 환경에 가장 적합해보였으며, 그 이유는 다음과 같습니다:
+
+- Rust + GPUI로 작성됨.
+- 맥시멈한 부가 기능이 없음.
+  - 단, 아직 출시한 지 얼마 안된 신생 프로젝트임
+- layout, theme을 json으로 사용자 설정 가능
+- 원하는 mod를 직접 개발/추가하여 사용 가능
+
+저는 바로 잔뜩 기대를 품은 채 Orca를 끄고 Herdr를 설치했습니다!
+
+![Herdr](https://assets.akuk.in/blog/in-content/herdr.png 'herdr-app')
+
+### 귀찮은 설치 과정
+
+먼저 Herdr는 WSL을 공식 지원하지 않습니다. 하지만 저는 회사에서는 Windows 환경을 사용했어야 했기에, 다음과 같은 방식으로 환경을 구축했습니다:
+
+- Herdr는 ssh 연결을 통한 외부 서버(Machine) 접근을 지원함.
+- WSL도 결국에는 가상 환경이며, 외부 환경처럼 사용 가능함.
+- WSL에 sshd를 띄움.
+- Herdr에서 ssh를 통해 WSL에 접근하고, Machine을 추가함.
+
+단, 이 과정에서 WSL의 `networkingMode` 를 `mirrored` 로 변경해야 했으며, password를 통한 접근은 지원하지 않았기에 WSL의 authorized_keys에 윈도우의 ssh-key를 등록해야 했습니다. 또한 다음에 소개할 모바일 릴레이를 위해 회사 VPN망에서 제 회사PC에 접근하는 ssh 포트를 open하는 방화벽 설정도 해야했습니다.
+
+### theme: GitHub Dark
+
+Herdr는 json을 통해 theme을 설정할 수 있으며, 저는 GitHub Dark theme를 선호하기에 직접 추가하여 사용하고 있습니다!
+
+```json
+{
+  "background": "#0d1117",
+  "foreground": "#e6edf3",
+  "selection": "#142747",
+  "cursor": "#2f81f7",
+  "ansi": [
+    "#484f58", "#ff7b72", "#3fb950", "#d29922", "#58a6ff", "#bc8cff", "#39c5cf", "#b1bac4",
+    "#6e7681", "#ffa198", "#56d364", "#e3b341", "#79c0ff", "#d2a8ff", "#56d4dd", "#ffffff"
+  ],
+  "colors": {
+    "background": "#0d1117",
+    "canvas": "#010409",
+    "chrome": "#010409",
+    "surface": "#161b22",
+    "popover": "#161b22",
+    "raised": "#21262d",
+    "hover": "#21262d",
+    "selected": "#142747",
+    "border": "#30363d",
+    "input": "#484f58",
+    "foreground": "#e6edf3",
+    "muted": "#848d97",
+    "dim": "#6e7681",
+    "accent": "#2f81f7",
+    "accent_foreground": "#ffffff",
+    "solid": "#238636",
+    "solid_foreground": "#ffffff",
+    "selection": "#142747",
+    "ring": "#1f6feb",
+    "working": "#d29922",
+    "blocked": "#f85149",
+    "done": "#3fb950",
+    "idle": "#848d97",
+    "unknown": "#6e7681"
+  }
+}
+```
+
+`~/.config/herdr-app/themes/github-dark.json` 에 위 내용을 추가하면 바로 사용 가능합니다!
+
+### mod: https://github.com/mathieucroset/herdr-pokemon-agents
+
+Herdr는 사용자가 직접 Herdr 앱을 커스텀할 수 있게 mod라는 개념을 제공하며, 이를 통해 Herdr에 필요한 기능들을 자유롭게 추가할 수 있습니다.
+
+![Orca Mobile](https://assets.akuk.in/blog/in-content/herdr-pokemon-agents.png 'herdr-pokemon-agents')
+
+https://github.com/mathieucroset/herdr-pokemon-agents 는 Herdr 위에서 실행 중인 AI Agent 들의 작업 현황을 Pokemon sprites로 시각화하는 모드입니다. AI Agent 들이 작업하면서 대기하는 시간을 조금이라도 덜 지루하게 만들어줍니다! 단, 포켓몬의 크기를 조절할 수 없는 단점이 있었으며, 이를 커스텀할 수 있도록 기능을 추가했습니다. 관련 수정사항에 대한 [PR](https://github.com/mathieucroset/herdr-pokemon-agents/pull/2)을 올려두었습니다.
+
+### 모바일 릴레이: Heeler
+
+Herdr는 이 포스트를 작성하는 시점에서는 공식으로 모바일 앱을 지원하지 않습니다.
+
+> https://github.com/herdrdev/herdr-app/issues/306 관련 이슈는 존재하는 것으로 보입니다.
+
+하지만, 서드파티 앱들이 있으며 [moshi](https://getmoshi.app/)를 시도해봤지만 사실상 유료로 사용해야 하여 사용 중단하고, 무료로 모든 기능을 사용 가능한 [Heeler](https://github.com/ZingerLittleBee/Heeler)를 시도해봤습니다.
+
+Heeler는 Orca Mobile에서 지원하던 대부분의 기능을 제공하며, 특히 Swift로 개발되어 iOS 환경에서 아주 매끄럽게 잘 동작해주었습니다만 치명적인 단점이 있었습니다. `herdr-core(hc)` 를 `herdr-app(desktop app)` 에서 실행하는 경우, Agent 동기화가 되지 않았습니다.
+
+https://github.com/ZingerLittleBee/Heeler/issues/541 위 문제는 이슈로 등록되었으며, 이 포스트를 작성하는 시점에서는 실제 배포는 되지 않았지만 해결된 문제로 보이며 곧 사용할 수 있을 것 같아 다행입니다!
+
+### 총평
+
+Orca에서 Herdr+Heeler로 완전히 갈아탔습니다!
+
+Herder+Heeler의 가벼운 사용감은 충분히 만족했지만, 결국 Git changes, File tree 기능이 별로였기에, 이 부분은 원래 사용하던 개발 도구인, [GitUI](https://github.com/gitui-org/gitui), [neovim](https://github.com/neovim/neovim) 등을 herdr 내부 터미널에서 사용하는 형태로 타협했습니다!
+
+## 3. Rex
+
+### 터미널 멀티플렉서
+
+Rex는 ADE가 아니라, 터미널 멀티플렉서입니다. 터미널 멀티플렉서(Terminal Multiplexer)란 하나의 터미널 연결에서 여러 개의 셸 세션을 생성하고 관리하는 프로그램이며 대표적으로 tmux, screen, Zellij가 있습니다. 이는 보통 ssh로 작업 중, 터미널 에뮬레이터나 ssh 연결을 종료해도 실행 중인 프로세스와 세션을 유지하기 위해 사용됩니다.
+
+Rex는 터미널 에뮬레이터의 기능도 같이 있으며 여러 앱과의 통합 기능 등의 부가 기능들이 포함되어 있으며, [Ghostty](https://github.com/ghostty-org/ghostty)의 개발자가 직접 libghostty 기반으로 개발하여 신뢰성 부분에서 강점이 있습니다.
+
+단, 현재는 초대 테스트를 진행하고 있으며 이메일을 통해 waitlist에 등록하고 통과되어야 사용할 수 있습니다. 또한, iOS, Windows 앱은 아직 개발 중이며 프로젝트가 조금 더 성숙해지면 다시 사용해볼 예정입니다.
+
+## 마치며
+
+2026-11-07일 기준, 저는 Herdr+Heeler를 사용 중입니다! AI Agent들의 발전으로 더 다양한 형태의 프로젝트들의 개발이 가속화되면서, 하나의 목적을 달성하는 도구를 고르는 것도 어려워진 것 같습니다.
+
+이후에도 더 제 개발 환경에 맞는 ADE 또는 다른 도구들이 나올 거라고 생각합니다! 어쩌면 DE(Development Environment) 자체가 사라질 수도 있다는 생각도 합니다.
+
+어쨌든 도구라는 개념이 존재할 때까지는 계속 탐색하는 건 즐거울 것 같네요!

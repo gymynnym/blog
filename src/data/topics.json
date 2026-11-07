@@ -74,5 +74,13 @@
   "ssh": {
     "slug": "ssh",
     "name": "SSH"
+  },
+  "orca": {
+    "slug": "orca",
+    "name": "Orca"
+  },
+  "herdr": {
+    "slug": "herdr",
+    "name": "Herdr"
   }
 }
