@@ -1,0 +1,192 @@
+---
+title: 'Exploring ADEs'
+description: 'Insights and experiences from testing, using, and evaluating several agentic development environments to find one that fits my workflow.'
+thumbnail: https://assets.akuk.in/blog/thumbnails/ADE_%20%E1%84%83%E1%85%AE%E1%86%AF%E1%84%85%E1%85%A5%E1%84%87%E1%85%A9%E1%84%80%E1%85%B5.png
+publishedAt: '2026-11-07T22:39:40+09:00'
+updatedAt: '2026-11-07T07:39:40.858655+09:00'
+topics: ['orca', 'herdr']
+author: 'gymynnym'
+draft: false
+---
+
+# Exploring ADEs
+
+## Introduction
+
+Lately, I have been using AI agents to develop software more often than writing the code myself. Just look at [GitHub Trending](https://github.com/trending): most projects seem to be built with AI agents or vibe coding.
+
+> I still write my blog posts myself, as a human!!!
+
+Until last month, I used Neovim for personal development and VSCode for work, while running AI agents separately in an external terminal app. Working this way, I kept switching between my IDE, terminal, browser, Slack, and other work apps. I started wondering whether all that window switching was making my workflow unnecessarily inefficient.
+
+To address this, I set up tiling window managers such as [AeroSpace](https://github.com/nikitabobko/AeroSpace) on macOS and [GlazeWM](https://github.com/glzr-io/glazewm) on Windows to make switching windows easier. But then I wondered: would an environment where I did not need to switch windows in the first place be a better choice? That curiosity led me to try ADEs, which had already caught my attention. Adopting one did make my development workflow more efficient.
+
+> What is an ADE? An **IDE (Integrated Development Environment)** focuses on developers writing and debugging code themselves. An **ADE (Agentic Development Environment)** is an environment built around development with AI agents.
+
+In this post, I share the insights and experiences I gained from testing, using, and evaluating several ADEs before choosing one.
+
+## 1. Orca
+
+![Orca](https://assets.akuk.in/blog/in-content/orca.jpg 'https://github.com/stablyai/orca')
+
+### My First ADE
+
+I chose Orca as my first ADE. Since this was my first experience with one, I wanted a popular option with as many features as possible, including everything I would expect from an IDE. It also had around 90,000 GitHub stars when I started using it!
+
+Once I tried an ADE, I found these features particularly useful:
+
+- AI agents are visually separated by project and worktree.
+  - This is especially helpful when running multiple agents in parallel.
+- Notifications arrive when AI agents finish their tasks.
+  - I no longer need to keep switching to terminal windows to check whether a task has finished.
+- Integrating AI agents on remote servers is straightforward.
+
+I also have to use Windows at work, so I rely on WSL. Orca's WSL support was very smooth! As you will see later, integrating WSL with some other ADEs was far more challenging...
+
+### Mobile Relay
+
+![Orca Mobile](https://assets.akuk.in/blog/in-content/orca-mobile.webp)
+
+Orca has an official mobile app that syncs with Orca desktop apps and lets you check task progress. You can even view and use the terminal environment directly from your phone!
+
+There are two ways to pair devices for mobile relay: Tailscale and Orca Relay. I chose Orca Relay because it works without needing to connect to Tailscale. The process was very smooth too: just sign in and scan a QR code.
+
+### The Problem: Too Many Features, Too Much Resource Usage
+
+I tested Orca for a week, trying new features as they arrived and gradually expanding the set of features I used. At the time, it felt as though features worthy of a major update were being added almost every day.
+
+I was so happy with it that I was recommending Orca to the rest of my development team. But as more features were added, the app consumed more computing resources. Eventually, WSL started shutting down and AI agents frequently froze while working. Other teammates experienced the same problems.
+
+### Verdict
+
+Although I no longer needed to use an IDE, the frequent crashes eventually made me give up on Orca. I began looking for a lighter ADE with only the features I needed.
+
+## 2. Herdr
+
+### An Exciting Search
+
+After exploring and trying several ADEs, including Monocode and Emdash, Herdr seemed to be the best fit for my development environment for the following reasons:
+
+- It is written in Rust with GPUI.
+- It does not come packed with extra features.
+  - That said, it is still a young project that was only recently released.
+- Layouts and themes can be customized with JSON.
+- You can develop and add your own mods.
+
+With high hopes, I immediately closed Orca and installed Herdr!
+
+![Herdr](https://assets.akuk.in/blog/in-content/herdr.png 'herdr-app')
+
+### A Tedious Setup
+
+First, Herdr does not officially support WSL. Since I still had to use Windows at work, I set up my environment as follows:
+
+- Herdr supports connecting to remote servers, called Machines, over SSH.
+- WSL is ultimately a virtual environment, so it can be treated as a remote environment.
+- I ran `sshd` inside WSL.
+- I connected to WSL over SSH from Herdr and added it as a Machine.
+
+This required changing WSL's `networkingMode` to `mirrored`. Password authentication was not supported, so I also had to add my Windows SSH public key to WSL's `authorized_keys`. For the mobile relay described below, I additionally configured the firewall to allow access to the SSH port on my work PC from the company VPN.
+
+### Theme: GitHub Dark
+
+Herdr lets you configure themes with JSON. Since I prefer GitHub Dark, I added my own theme!
+
+```json
+{
+  "background": "#0d1117",
+  "foreground": "#e6edf3",
+  "selection": "#142747",
+  "cursor": "#2f81f7",
+  "ansi": [
+    "#484f58",
+    "#ff7b72",
+    "#3fb950",
+    "#d29922",
+    "#58a6ff",
+    "#bc8cff",
+    "#39c5cf",
+    "#b1bac4",
+    "#6e7681",
+    "#ffa198",
+    "#56d364",
+    "#e3b341",
+    "#79c0ff",
+    "#d2a8ff",
+    "#56d4dd",
+    "#ffffff"
+  ],
+  "colors": {
+    "background": "#0d1117",
+    "canvas": "#010409",
+    "chrome": "#010409",
+    "surface": "#161b22",
+    "popover": "#161b22",
+    "raised": "#21262d",
+    "hover": "#21262d",
+    "selected": "#142747",
+    "border": "#30363d",
+    "input": "#484f58",
+    "foreground": "#e6edf3",
+    "muted": "#848d97",
+    "dim": "#6e7681",
+    "accent": "#2f81f7",
+    "accent_foreground": "#ffffff",
+    "solid": "#238636",
+    "solid_foreground": "#ffffff",
+    "selection": "#142747",
+    "ring": "#1f6feb",
+    "working": "#d29922",
+    "blocked": "#f85149",
+    "done": "#3fb950",
+    "idle": "#848d97",
+    "unknown": "#6e7681"
+  }
+}
+```
+
+Save the contents above to `~/.config/herdr-app/themes/github-dark.json` to start using it right away!
+
+### Mod: https://github.com/mathieucroset/herdr-pokemon-agents
+
+Herdr provides a mod system that lets users customize the app and add the features they need.
+
+![Herdr Pokémon Agents](https://assets.akuk.in/blog/in-content/herdr-pokemon-agents.png 'herdr-pokemon-agents')
+
+https://github.com/mathieucroset/herdr-pokemon-agents is a mod that visualizes the progress of AI agents running in Herdr using Pokémon sprites. It makes waiting for agents to finish their work a little less boring! One limitation was that the Pokémon sizes could not be adjusted, so I added support for customizing them and submitted a [PR](https://github.com/mathieucroset/herdr-pokemon-agents/pull/2).
+
+### Mobile Relay: Heeler
+
+At the time of writing, Herdr does not have an official mobile app.
+
+> There appears to be a related issue: https://github.com/herdrdev/herdr-app/issues/306
+
+There are third-party apps, though. I tried [moshi](https://getmoshi.app/), but stopped using it because it effectively required a paid subscription. I then tried [Heeler](https://github.com/ZingerLittleBee/Heeler), which offers all its features for free.
+
+Heeler provides most of the features I had used in Orca Mobile. Since it is built with Swift, it worked very smoothly on iOS. However, I ran into a critical problem: agents did not sync when `herdr-core(hc)` was launched from `herdr-app(desktop app)`.
+
+The problem was reported in https://github.com/ZingerLittleBee/Heeler/issues/541. At the time of writing, it appeared to have been fixed, although the fix had not yet been released. I am glad it looks like I will be able to use it soon!
+
+### Verdict
+
+I switched completely from Orca to Herdr + Heeler!
+
+I was happy with how lightweight Herdr + Heeler felt, but I was not satisfied with the Git changes and file tree features. I settled on using my existing tools, such as [GitUI](https://github.com/gitui-org/gitui) and [Neovim](https://github.com/neovim/neovim), inside Herdr's terminal instead!
+
+## 3. Rex
+
+### A Terminal Multiplexer
+
+Rex is a terminal multiplexer rather than an ADE. A terminal multiplexer is a program that creates and manages multiple shell sessions within a single terminal connection. Well-known examples include tmux, screen, and Zellij. These tools are commonly used to keep processes and sessions running when a terminal emulator or SSH connection is closed, particularly while working over SSH.
+
+Rex also includes terminal emulator functionality and extra features such as integrations with other apps. It is built on libghostty by the developer of [Ghostty](https://github.com/ghostty-org/ghostty), which gives me confidence in its reliability.
+
+For now, it is in invite-only testing: you need to join the waitlist by email and receive an invitation to use it. The iOS and Windows apps are also still in development, so I plan to give it another try once the project has matured a little more.
+
+## Closing Thoughts
+
+As of November 7, 2026, I am using Herdr + Heeler! As AI agents accelerate the development of a wider variety of projects, even choosing a tool for a single purpose seems to be getting harder.
+
+I expect more ADEs and other tools that fit my workflow to appear in the future. Sometimes I even wonder whether the concept of a DE (Development Environment) itself might disappear.
+
+Either way, as long as tools exist, I think I will keep enjoying the search!

@@ -6,6 +6,10 @@
 </div>
 
 <style>
+  [data-post-content] :global(a) {
+    overflow-wrap: anywhere;
+  }
+
   [data-post-content] :global(pre),
   [data-post-content] :global(:not(pre) > code:not(:is(h1, h2, h3, h4, h5, h6, [title]) *)) {
     font-size: var(--text-sm);
