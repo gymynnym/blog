@@ -1,5 +1,8 @@
 ---
-import { Check, Copy } from '@lucide/astro';
+import { Image } from 'astro:assets';
+import { ArrowUpRight, Check, Copy } from '@lucide/astro';
+import chatgptLogo from '@/assets/icons/logos/chatgpt.svg';
+import claudeLogo from '@/assets/icons/logos/claude.svg';
 import { ui, type Locale } from '@/lib/i18n';
 import { homePath, postsPath, projectsPath } from '@/lib/routes';
 
@@ -14,10 +17,14 @@ const paths = {
   posts: postsPath(locale),
   projects: projectsPath(locale),
 };
-const prompts = labels.agentPrompts.map(({ page, message }) => ({
-  message,
-  url: new URL(`${paths[page]}/`, Astro.site).href,
-}));
+const prompts = labels.agentPrompts.map(({ page, message }) => {
+  const url = new URL(`${paths[page]}/`, Astro.site).href;
+  return { message, url, prompt: `${url}\n${message}` };
+});
+const platforms = [
+  { name: 'ChatGPT', logo: chatgptLogo, url: 'https://chatgpt.com/' },
+  { name: 'Claude', logo: claudeLogo, url: 'https://claude.ai/new' },
+];
 ---
 
 <div
@@ -25,33 +32,64 @@ const prompts = labels.agentPrompts.map(({ page, message }) => ({
   data-agent-prompts
   data-copy-success={labels.promptCopySuccess}
   data-copy-error={labels.promptCopyError}
+  data-platform-copy-success={labels.platformPromptCopied}
 >
   <p class="text-muted-foreground text-sm leading-6 sm:text-base">{labels.agentPromptsDescription}</p>
-  <ul class="mt-2 -mx-2 space-y-0.5" role="list">
-    {prompts.map(({ message, url }) => (
-      <li>
-        <button
-          type="button"
-          class="hover:bg-accent hover:text-accent-foreground focus-visible:outline-foreground inline-flex min-h-7.5 w-fit max-w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-wait"
-          data-copy-prompt={`${url}\n${message}`}
-          aria-label={`${labels.copyPrompt}: ${message}`}
-          title={`${url}\n${message}`}
+  <ul class="mt-4 space-y-3" role="list">
+    {prompts.map(({ message, url, prompt }) => (
+      <li data-agent-prompt>
+        <p class="text-sm leading-5" data-prompt-text>
+          {message}
+          <span class="text-muted-foreground mt-1 block font-mono text-xs leading-5 break-all" data-prompt-url hidden>
+            {url}
+          </span>
+        </p>
+        <div
+          class="mt-1.5 flex flex-wrap items-center gap-1.5"
+          role="group"
+          aria-label={`${labels.promptActions}: ${message}`}
         >
-          <span class="text-muted-foreground shrink-0" aria-hidden="true">
-            <span class="flex items-center" data-copy-idle>
+          <button
+            type="button"
+            class="bg-secondary text-secondary-foreground hover:bg-secondary/70 focus-visible:outline-foreground inline-flex min-h-7.5 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-wait"
+            data-copy-prompt={prompt}
+            aria-label={`${labels.copyPrompt}: ${message}`}
+            title={prompt}
+          >
+            <span class="flex items-center gap-1.5" data-copy-idle aria-hidden="true">
               <Copy class="size-3.5" />
+              {labels.copyPrompt}
             </span>
-            <span class="flex items-center" data-copy-done hidden>
+            <span class="flex items-center gap-1.5" data-copy-done aria-hidden="true" hidden>
               <Check class="size-3.5" />
+              {labels.promptCopied}
             </span>
-          </span>
-          <span class="min-w-0 select-text" data-prompt-text>
-            <span class="block text-sm leading-5">{message}</span>
-            <span class="text-muted-foreground mt-1 block font-mono text-xs leading-5 break-all" data-prompt-url hidden>
-              {url}
-            </span>
-          </span>
-        </button>
+          </button>
+          {platforms.map((platform) => {
+            const href = new URL(platform.url);
+            href.searchParams.set('q', prompt);
+            const label = labels.openInAI.replace('{platform}', platform.name);
+            return (
+              <a
+                href={href.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="bg-secondary text-secondary-foreground hover:bg-secondary/70 focus-visible:outline-foreground inline-flex min-h-7.5 items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+                aria-label={label}
+                title={label}
+                data-ai-platform={platform.name}
+                data-ai-prompt={prompt}
+              >
+                <Image
+                  src={platform.logo}
+                  alt=""
+                  class:list={['size-3.5 object-contain', { 'dark:invert': platform.name === 'ChatGPT' }]}
+                />
+                <ArrowUpRight class="text-muted-foreground size-3" aria-hidden="true" />
+              </a>
+            );
+          })}
+        </div>
       </li>
     ))}
   </ul>
@@ -66,11 +104,25 @@ const prompts = labels.agentPrompts.map(({ page, message }) => ({
 <script>
   for (const container of document.querySelectorAll<HTMLElement>('[data-agent-prompts]')) {
     const status = container.querySelector<HTMLElement>('[data-copy-status]');
+    for (const link of container.querySelectorAll<HTMLAnchorElement>('[data-ai-platform]')) {
+      link.addEventListener('click', async () => {
+        const prompt = link.dataset.aiPrompt;
+        if (!prompt) return;
+
+        try {
+          await navigator.clipboard.writeText(prompt);
+          if (status) status.textContent = container.dataset.platformCopySuccess ?? '';
+        } catch {
+          if (status) status.textContent = container.dataset.copyError ?? '';
+        }
+      });
+    }
 
     for (const button of container.querySelectorAll<HTMLButtonElement>('[data-copy-prompt]')) {
       const idle = button.querySelector<HTMLElement>('[data-copy-idle]');
       const done = button.querySelector<HTMLElement>('[data-copy-done]');
-      const url = button.querySelector<HTMLElement>('[data-prompt-url]');
+      const row = button.closest('[data-agent-prompt]');
+      const url = row?.querySelector<HTMLElement>('[data-prompt-url]');
       let resetTimer: number | undefined;
 
       button.addEventListener('click', async () => {
@@ -97,7 +149,7 @@ const prompts = labels.agentPrompts.map(({ page, message }) => ({
           if (url) url.hidden = false;
           if (status) status.textContent = container.dataset.copyError ?? '';
 
-          const text = button.querySelector('[data-prompt-text]');
+          const text = row?.querySelector('[data-prompt-text]');
           const selection = window.getSelection();
           if (text && selection) {
             const range = document.createRange();
