@@ -1,0 +1,4 @@
+pre-commit:
+  commands:
+    mdx-spacing:
+      run: mise exec -- go -C scripts run ./mdx-spacing --staged

@@ -237,7 +237,7 @@ severity = "critical"
 actions = ["notify"]
 ```
 
-**[alert]**は特定の状況で警告を出すルールです。例は私の設定なので、ご自分の環境に合わせて調整してください。
+**[alert]** は特定の状況で警告を出すルールです。例は私の設定なので、ご自分の環境に合わせて調整してください。
 
 ```
 [[notify.webhooks]]
@@ -246,7 +246,7 @@ url = "https://discord.com/api/webhooks/..."
 template = '{"content": "**{{.Subject}}**\n{{.Body}}"}'
 ```
 
-**[notify]**で通知を設定します。私はDiscordをよく使うためWebhookを登録しました。SMTPによるメール通知も可能です。
+**[notify]** で通知を設定します。私はDiscordをよく使うためWebhookを登録しました。SMTPによるメール通知も可能です。
 
 設定が終わったら、`docker compose up`でtori agentを起動します。
 

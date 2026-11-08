@@ -10,6 +10,9 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
+    "mdx:check": "go -C scripts run ./mdx-spacing",
+    "mdx:fix": "go -C scripts run ./mdx-spacing --fix",
+    "test:mdx": "go -C scripts test ./mdx-spacing",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

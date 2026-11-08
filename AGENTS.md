@@ -10,6 +10,12 @@ Manage the background server with `astro dev stop`, `astro dev status`, and `ast
 
 ## Documentation
 
+When editing Korean (`src/content/posts/ko`) or Japanese (`src/content/posts/ja`) MDX,
+run `pnpm mdx:check` before finishing to catch bold delimiters that render as literal text.
+Do not require spaces around valid bold text or inline code: `**성능 관점**에서` and adjacent inline code are valid.
+Use `pnpm mdx:fix` to add only the spaces needed by CommonMark's delimiter rules.
+Do not change code blocks, frontmatter, or link destinations to satisfy the check.
+
 Full documentation: https://docs.astro.build
 
 Consult these guides before working on related tasks:

@@ -13,7 +13,7 @@ draft: false
 
 ## メールの概要
 
-**メール（電子郵便）**は電子機器でメッセージを送受信する方法です。最初は1971年にARPANETで送信され、そのとき登場した`username@hostname`は今も使われています。1971年の技術が今も安全なのか気になり、現代の仕組みを調べました。
+**メール（電子郵便）** は電子機器でメッセージを送受信する方法です。最初は1971年にARPANETで送信され、そのとき登場した`username@hostname`は今も使われています。1971年の技術が今も安全なのか気になり、現代の仕組みを調べました。
 
 ## メールのプロトコル
 
@@ -21,7 +21,7 @@ draft: false
 
 ### SMTP/ESMTP：送信プロトコル
 
-**SMTP（Simple Mail Transfer Protocol）**はネットワークでメールを送るプロトコルで、次の要素があります。
+**SMTP（Simple Mail Transfer Protocol）** はネットワークでメールを送るプロトコルで、次の要素があります。
 
 1. **MUA(Mail User Agent)**
    - 利用者のメールクライアント。
@@ -58,7 +58,7 @@ S -> C : 250 SIZE 52428800
 ```
 
 - `HELO`：基本のSMTPを開始。
-- `EHLO`：**ESMTP（拡張SMTP）**を開始。
+- `EHLO`：**ESMTP（拡張SMTP）** を開始。
 
 #### 3-1. TLS接続（STARTTLS）
 
@@ -127,7 +127,7 @@ TCP接続を終了します。
 
 ### POP3/IMAP：受信プロトコル
 
-主な受信プロトコルは**POP3（Post Office Protocol v3）**と**IMAP（Internet Message Access Protocol）**です。どちらもMDAのメールをMUAで読むものですが、次の違いがあります。
+主な受信プロトコルは**POP3（Post Office Protocol v3）**と**IMAP（Internet Message Access Protocol）** です。どちらもMDAのメールをMUAで読むものですが、次の違いがあります。
 
 | 項目             | **POP3**                         | **IMAP**                               |
 | ---------------- | -------------------------------- | -------------------------------------- |
@@ -164,7 +164,7 @@ S -> C : +OK Bye
 
 ### SPF
 
-**SPF（Sender Policy Framework）**は送信サーバーのIPを指定し、送信者偽装を防ぐ技術です。[DNS TXTレコード](https://www.cloudflare.com/learning/dns/dns-records/dns-txt-record/)で設定します。
+**SPF（Sender Policy Framework）** は送信サーバーのIPを指定し、送信者偽装を防ぐ技術です。[DNS TXTレコード](https://www.cloudflare.com/learning/dns/dns-records/dns-txt-record/)で設定します。
 
 SPFのTXTレコードは次の形式です。
 
@@ -211,7 +211,7 @@ selector._domainkey.example.org.  IN  TXT  "v=dkim1; k=rsa; p=..."
 
 ### DMARC
 
-**DMARC（Domain-based Message Authentication, Reporting, and Conformance）**はSPFとDKIMの結果から受信サーバーへ処理方針を伝えます。[DNS TXTレコード](https://www.cloudflare.com/learning/dns/dns-records/dns-txt-record/)で設定します。
+**DMARC（Domain-based Message Authentication, Reporting, and Conformance）** はSPFとDKIMの結果から受信サーバーへ処理方針を伝えます。[DNS TXTレコード](https://www.cloudflare.com/learning/dns/dns-records/dns-txt-record/)で設定します。
 
 DMARCのTXTレコードは次の形式です。
 
