@@ -12,5 +12,5 @@ export function topicFromEntry({ data: { slug, name } }: CollectionEntry<'topics
 }
 
 export async function resolveTopics(references: Post['data']['topics']): Promise<Topic[]> {
-  return (await getEntries(references)).map(topicFromEntry);
+  return (await getEntries(references ?? [])).map(topicFromEntry);
 }

@@ -1,6 +1,6 @@
 ---
 import { Image } from 'astro:assets';
-import { ArrowUpRight, Check, Copy } from '@lucide/astro';
+import { ChevronDown, Copy } from '@lucide/astro';
 import chatgptLogo from '@/assets/icons/logos/chatgpt.svg';
 import claudeLogo from '@/assets/icons/logos/claude.svg';
 import { ui, type Locale } from '@/lib/i18n';
@@ -17,10 +17,12 @@ const paths = {
   posts: postsPath(locale),
   projects: projectsPath(locale),
 };
-const prompts = labels.agentPrompts.map(({ page, message }) => {
-  const url = new URL(`${paths[page]}/`, Astro.site).href;
-  return { message, url, prompt: `${url}\n${message}` };
-});
+const prompts = labels.agentPrompts.map(({ page, label, message }) => ({
+  label,
+  message,
+  url: new URL(`${paths[page]}/`, Astro.site ?? Astro.url).href,
+}));
+const [initialPrompt] = prompts;
 const platforms = [
   { name: 'ChatGPT', logo: chatgptLogo, url: 'https://chatgpt.com/' },
   { name: 'Claude', logo: claudeLogo, url: 'https://claude.ai/new' },
@@ -28,139 +30,246 @@ const platforms = [
 ---
 
 <div
-  class="mt-5 max-w-lg"
+  class="agent-prompts"
   data-agent-prompts
   data-copy-success={labels.promptCopySuccess}
   data-copy-error={labels.promptCopyError}
   data-platform-copy-success={labels.platformPromptCopied}
 >
-  <p class="text-muted-foreground text-sm leading-6 sm:text-base">{labels.agentPromptsDescription}</p>
-  <ul class="mt-4 space-y-3" role="list">
-    {prompts.map(({ message, url, prompt }) => (
-      <li data-agent-prompt>
-        <p class="text-sm leading-5" data-prompt-text>
-          {message}
-          <span class="text-muted-foreground mt-1 block font-mono text-xs leading-5 break-all" data-prompt-url hidden>
-            {url}
-          </span>
-        </p>
-        <div
-          class="mt-1.5 flex flex-wrap items-center gap-1.5"
-          role="group"
-          aria-label={`${labels.promptActions}: ${message}`}
-        >
-          <button
-            type="button"
-            class="bg-secondary text-secondary-foreground hover:bg-secondary/70 focus-visible:outline-foreground inline-flex min-h-7.5 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-wait"
-            data-copy-prompt={prompt}
-            aria-label={`${labels.copyPrompt}: ${message}`}
-            title={prompt}
+  <div class="prompt-bar" role="group" aria-label={labels.promptActions}>
+    <div class="preset">
+      <select aria-label={labels.promptPreset} data-preset>
+        {prompts.map(({ label, message, url }, index) => (
+          <option value={message} data-url={url} selected={index === 0}>
+            {label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown class="preset-chevron size-4" aria-hidden="true" />
+    </div>
+    <textarea
+      class="question"
+      rows="2"
+      aria-label={labels.promptQuestion}
+      readonly
+      data-question
+    >{initialPrompt.message}</textarea>
+    <div class="actions">
+      <button type="button" data-copy aria-label={labels.copyPrompt} title={labels.copyPrompt}>
+        <Copy class="size-4" aria-hidden="true" />
+      </button>
+      {platforms.map(({ name, logo, url }) => {
+        const href = new URL(url);
+        href.searchParams.set('q', `${initialPrompt.url}\n${initialPrompt.message}`);
+        const label = labels.openInAI.replace('{platform}', name);
+        return (
+          <a
+            href={href.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={label}
+            title={label}
+            data-platform={url}
           >
-            <span class="flex items-center gap-1.5" data-copy-idle aria-hidden="true">
-              <Copy class="size-3.5" />
-              {labels.copyPrompt}
-            </span>
-            <span class="flex items-center gap-1.5" data-copy-done aria-hidden="true" hidden>
-              <Check class="size-3.5" />
-              {labels.promptCopied}
-            </span>
-          </button>
-          {platforms.map((platform) => {
-            const href = new URL(platform.url);
-            href.searchParams.set('q', prompt);
-            const label = labels.openInAI.replace('{platform}', platform.name);
-            return (
-              <a
-                href={href.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="bg-secondary text-secondary-foreground hover:bg-secondary/70 focus-visible:outline-foreground inline-flex min-h-7.5 items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-                aria-label={label}
-                title={label}
-                data-ai-platform={platform.name}
-                data-ai-prompt={prompt}
-              >
-                <Image
-                  src={platform.logo}
-                  alt=""
-                  class:list={['size-3.5 object-contain', { 'dark:invert': platform.name === 'ChatGPT' }]}
-                />
-                <ArrowUpRight class="text-muted-foreground size-3" aria-hidden="true" />
-              </a>
-            );
-          })}
-        </div>
-      </li>
-    ))}
-  </ul>
-  <p
-    class="text-muted-foreground mt-1 text-xs leading-5 empty:hidden"
-    role="status"
-    aria-atomic="true"
-    data-copy-status
-  ></p>
+            <Image src={logo} alt="" class:list={['size-4 object-contain', { 'dark:invert': name === 'ChatGPT' }]} />
+          </a>
+        );
+      })}
+    </div>
+  </div>
+  <p class="copy-status" role="status" data-copy-status></p>
 </div>
 
 <script>
-  for (const container of document.querySelectorAll<HTMLElement>('[data-agent-prompts]')) {
-    const status = container.querySelector<HTMLElement>('[data-copy-status]');
-    for (const link of container.querySelectorAll<HTMLAnchorElement>('[data-ai-platform]')) {
-      link.addEventListener('click', async () => {
-        const prompt = link.dataset.aiPrompt;
-        if (!prompt) return;
+  const container = document.querySelector<HTMLElement>('[data-agent-prompts]');
+  const preset = container?.querySelector<HTMLSelectElement>('[data-preset]');
+  const question = container?.querySelector<HTMLTextAreaElement>('[data-question]');
+  const copy = container?.querySelector<HTMLButtonElement>('[data-copy]');
+  const status = container?.querySelector<HTMLElement>('[data-copy-status]');
 
-        try {
-          await navigator.clipboard.writeText(prompt);
-          if (status) status.textContent = container.dataset.platformCopySuccess ?? '';
-        } catch {
-          if (status) status.textContent = container.dataset.copyError ?? '';
+  if (container && preset && question && copy && status) {
+    const platforms = container.querySelectorAll<HTMLAnchorElement>('[data-platform]');
+    const getPrompt = () => {
+      const message = preset.value;
+      const url = preset.selectedOptions[0]?.dataset.url;
+      return message && url ? `${url}\n${message}` : '';
+    };
+    const updateActions = () => {
+      question.value = preset.value;
+      const prompt = getPrompt();
+      copy.disabled = !prompt;
+      status.textContent = '';
+      for (const platform of platforms) {
+        if (prompt) {
+          const href = new URL(platform.dataset.platform ?? platform.href);
+          href.searchParams.set('q', prompt);
+          platform.href = href.href;
+        } else {
+          platform.removeAttribute('href');
         }
-      });
+      }
+    };
+    const copyPrompt = async (success: string, selectOnError = false) => {
+      const prompt = getPrompt();
+      if (!prompt) return;
+
+      try {
+        await navigator.clipboard.writeText(prompt);
+        status.textContent = success;
+      } catch {
+        status.textContent = container.dataset.copyError ?? '';
+        if (selectOnError) question.select();
+      }
+    };
+
+    preset.addEventListener('change', updateActions);
+    copy.addEventListener('click', () => copyPrompt(container.dataset.copySuccess ?? '', true));
+    for (const platform of platforms) {
+      platform.addEventListener('click', () => copyPrompt(container.dataset.platformCopySuccess ?? ''));
     }
-
-    for (const button of container.querySelectorAll<HTMLButtonElement>('[data-copy-prompt]')) {
-      const idle = button.querySelector<HTMLElement>('[data-copy-idle]');
-      const done = button.querySelector<HTMLElement>('[data-copy-done]');
-      const row = button.closest('[data-agent-prompt]');
-      const url = row?.querySelector<HTMLElement>('[data-prompt-url]');
-      let resetTimer: number | undefined;
-
-      button.addEventListener('click', async () => {
-        const prompt = button.dataset.copyPrompt;
-        if (!prompt) return;
-
-        window.clearTimeout(resetTimer);
-        button.disabled = true;
-        if (status) status.textContent = '';
-
-        try {
-          await navigator.clipboard.writeText(prompt);
-          if (idle) idle.hidden = true;
-          if (done) done.hidden = false;
-          if (url) url.hidden = true;
-          if (status) status.textContent = container.dataset.copySuccess ?? '';
-          resetTimer = window.setTimeout(() => {
-            if (idle) idle.hidden = false;
-            if (done) done.hidden = true;
-          }, 2000);
-        } catch {
-          if (idle) idle.hidden = false;
-          if (done) done.hidden = true;
-          if (url) url.hidden = false;
-          if (status) status.textContent = container.dataset.copyError ?? '';
-
-          const text = row?.querySelector('[data-prompt-text]');
-          const selection = window.getSelection();
-          if (text && selection) {
-            const range = document.createRange();
-            range.selectNodeContents(text);
-            selection.removeAllRanges();
-            selection.addRange(range);
-          }
-        } finally {
-          button.disabled = false;
-        }
-      });
-    }
+    window.addEventListener('pageshow', updateActions);
+    updateActions();
   }
 </script>
+
+<style>
+  .agent-prompts {
+    position: relative;
+    z-index: 0;
+    width: min(100%, 52rem);
+    align-self: center;
+  }
+
+  .prompt-bar {
+    --prompt-divider: color-mix(in srgb, var(--foreground) 13%, transparent);
+    --prompt-radius: var(--radius-xl);
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    border: 1px solid var(--prompt-divider);
+    border-radius: var(--prompt-radius);
+    background: color-mix(in srgb, var(--background) 57%, transparent);
+    -webkit-backdrop-filter: blur(0.4375rem);
+    backdrop-filter: blur(0.4375rem);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--foreground) 5%, transparent),
+      0 2px 4px rgb(0 0 0 / 5%),
+      0 12px 28px -12px rgb(0 0 0 / 23%);
+    text-align: start;
+  }
+
+  .preset {
+    position: relative;
+    display: flex;
+    border-inline-end: 1px solid var(--prompt-divider);
+  }
+
+  .preset select {
+    width: 100%;
+    appearance: none;
+    border-start-start-radius: calc(var(--prompt-radius) - 1px);
+    border-end-start-radius: calc(var(--prompt-radius) - 1px);
+    padding: 0.75rem 2.375rem 0.75rem 1rem;
+    background: transparent;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .preset option {
+    background: var(--popover);
+    color: var(--popover-foreground);
+  }
+
+  .preset :global(.preset-chevron) {
+    position: absolute;
+    inset-inline-end: 0.875rem;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--muted-foreground);
+  }
+
+  .question {
+    display: block;
+    min-width: 0;
+    min-height: 3.75rem;
+    max-height: 8rem;
+    padding: 1.1rem 1rem;
+    field-sizing: content;
+    resize: none;
+    background: transparent;
+    font-family: 'IBM Plex Mono', var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.45;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    padding: 0.25rem 0.375rem;
+    border-inline-start: 1px solid var(--prompt-divider);
+  }
+
+  .actions > :is(button, a) {
+    display: grid;
+    width: 2.75rem;
+    min-height: 2.75rem;
+    place-items: center;
+    border-radius: 0.5rem;
+    color: var(--foreground);
+    cursor: pointer;
+  }
+
+  .preset select:hover,
+  .actions > :is(button:enabled, a[href]):hover {
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  }
+
+  .actions > :is(button:disabled, a:not([href])) {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  :is(select, textarea, button, a):focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: -2px;
+  }
+
+  .copy-status {
+    position: absolute;
+    inset: calc(100% + 0.5rem) 0 auto;
+    z-index: 1;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    text-align: center;
+  }
+
+  @media (max-width: 40rem) {
+    .prompt-bar {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .preset,
+    .actions {
+      border-inline: 0;
+    }
+
+    .preset {
+      border-block-end: 1px solid var(--prompt-divider);
+    }
+
+    .preset select {
+      min-height: 2.75rem;
+      border-start-end-radius: calc(var(--prompt-radius) - 1px);
+      border-end-start-radius: 0;
+    }
+
+    .actions {
+      justify-content: end;
+      border-block-start: 1px solid var(--prompt-divider);
+    }
+  }
+</style>

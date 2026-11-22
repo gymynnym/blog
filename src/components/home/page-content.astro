@@ -1,180 +1,87 @@
 ---
-import { Image } from 'astro:assets';
-import { ArrowRight, ArrowUpRight } from '@lucide/astro';
-import githubLogo from '@/assets/icons/logos/github.svg';
-import zennLogo from '@/assets/icons/logos/zenn.svg';
 import AgentPrompts from '@/components/home/agent-prompts.astro';
-import PostListItem from '@/components/posts/list-item.astro';
-import ProjectList from '@/components/projects/list.astro';
-import ProjectListItem from '@/components/projects/list-item.astro';
-import { projects } from '@/data/projects';
+import HeroBackground from '@/components/home/hero-background.astro';
+import RecentPosts from '@/components/home/recent-posts.astro';
+import TopicBadge from '@/components/topics/badge.astro';
 import { ui, type Locale } from '@/lib/i18n';
-import { postRoute, publishedPosts } from '@/lib/posts';
-import { postPath, postsPath, projectsPath } from '@/lib/routes';
+import { publishedPosts } from '@/lib/posts';
+import { resolveTopics } from '@/lib/topics';
 
 interface Props {
   locale: Locale;
 }
+
 const { locale } = Astro.props;
-const labels = ui[locale];
 const posts = await publishedPosts(locale);
-const [featured, ...recent] = posts.slice(0, 4);
+const topicReferences = new Map(
+  posts.flatMap((post) => (post.data.topics ?? []).map((topic) => [topic.id, topic] as const)),
+);
+const topics = (await resolveTopics([...topicReferences.values()])).sort((a, b) =>
+  a.name.localeCompare(b.name, locale),
+);
+const title = 'gymynnym';
 ---
 
-<main class="page-shell">
-  <div class="grid items-center gap-10 pb-12 sm:pb-16 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-20">
-    <section aria-labelledby="home-title">
-      <h1
-        id="home-title"
-        class="max-w-xl text-4xl leading-[1.2] font-semibold tracking-tight text-balance break-keep sm:text-5xl lg:text-6xl"
-      >
-        {labels.homeTitle}
-      </h1>
-      <AgentPrompts locale={locale} />
-    </section>
-
-    <aside class="rounded-lg border" aria-labelledby="whoami-title">
-      <div class="bg-muted/40 flex items-center justify-between border-b px-5 py-3">
-        <h2 id="whoami-title" class="text-muted-foreground font-mono text-xs">
-          $ whoami
-        </h2>
-        <span class="text-muted-foreground font-mono text-xs" aria-hidden="true">
-          ~/blog
-        </span>
-      </div>
-      <div class="p-5">
-        <div class="flex items-center gap-3">
-          <img
-            src="https://avatars.githubusercontent.com/u/118962415?v=4"
-            alt=""
-            width="44"
-            height="44"
-            class="size-11 rounded-full"
-          />
-          <div>
-            <p class="font-medium">
-              박지민 <span class="text-muted-foreground text-sm font-normal">Jimin Park</span>
-            </p>
-            <p class="text-muted-foreground mt-0.5 font-mono text-xs">@gymynnym</p>
-          </div>
+<main>
+  <section class="home-hero" aria-labelledby="home-title">
+    <HeroBackground />
+    <h1 id="home-title" class="font-mono" aria-label={title}>
+      <svg viewBox="0 -8 1000 152" aria-hidden="true" focusable="false">
+        <text x="2" y="96" textLength="996" lengthAdjust="spacingAndGlyphs">
+          {title}
+        </text>
+      </svg>
+    </h1>
+    <AgentPrompts locale={locale} />
+    {topics.length > 0 && (
+      <nav class="home-topics" aria-labelledby="home-topics-label">
+        <p id="home-topics-label" class="text-muted-foreground text-center text-sm">
+          {ui[locale].browseByTopic}
+        </p>
+        <div class="flex flex-wrap justify-center gap-2">
+          {topics.map((topic) => (
+            <TopicBadge locale={locale} topic={topic} tab="posts" />
+          ))}
         </div>
-        <dl class="mt-5 space-y-2 font-mono text-xs leading-6">
-          <div class="flex gap-2">
-            <dt class="text-muted-foreground w-20 shrink-0">based in</dt>
-            <dd>Asia/Seoul 🇰🇷</dd>
-          </div>
-          <div class="flex gap-2">
-            <dt class="text-muted-foreground w-20 shrink-0">interests</dt>
-            <dd>dev, singularity</dd>
-          </div>
-          <div class="flex gap-2">
-            <dt class="text-muted-foreground w-20 shrink-0">email</dt>
-            <dd class="min-w-0">
-              <a class="underline-offset-4 hover:underline" href="mailto:gymynnym@gmail.com">
-                gymynnym@gmail.com
-              </a>
-            </dd>
-          </div>
-        </dl>
-        <nav class="mt-5 grid grid-cols-2 gap-2 border-t pt-4" aria-label="Profile links">
-          <a
-            href="https://github.com/gymynnym"
-            class="bg-foreground text-background flex min-h-10 items-center justify-center gap-2 rounded-md text-xs font-medium transition-opacity hover:opacity-80"
-            target="_blank"
-            rel="me noreferrer"
-          >
-            <Image src={githubLogo} alt="" class="size-3.5" />
-            GitHub <ArrowUpRight class="size-3" aria-hidden="true" />
-          </a>
-          <a
-            href="https://zenn.dev/gymynnym"
-            class="hover:bg-muted flex min-h-10 items-center justify-center gap-2 rounded-md border text-xs font-medium transition-colors"
-            target="_blank"
-            rel="me noreferrer"
-          >
-            <Image src={zennLogo} alt="" class="size-4" />
-            Zenn <ArrowUpRight class="size-3" aria-hidden="true" />
-          </a>
-        </nav>
-      </div>
-    </aside>
-  </div>
-
-  <section aria-labelledby="recent-title" class="border-t pt-8 sm:pt-10">
-    <div class="mb-6 flex flex-wrap items-center justify-between gap-2">
-      <h2 id="recent-title" class="text-xl font-semibold tracking-tight">
-        {labels.latestPosts}
-        <span class="text-muted-foreground ml-3 font-mono text-xs font-normal">/ posts</span>
-      </h2>
-      <a href={postsPath(locale)} class="text-link">
-        {labels.allPosts}
-        <ArrowRight class="size-4" aria-hidden="true" />
-      </a>
-    </div>
-    {featured ? (
-      <>
-        <a
-          href={postPath(locale, postRoute(featured).slug)}
-          class="group relative isolate flex min-h-80 overflow-hidden rounded-lg bg-neutral-950 px-6 py-8 text-white sm:min-h-96 sm:p-10"
-        >
-          {featured.data.thumbnail && (
-            <img
-              src={featured.data.thumbnail}
-              alt=""
-              class="absolute inset-0 -z-20 size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-              fetchpriority="high"
-            />
-          )}
-          <div
-            class="absolute inset-0 -z-10 bg-linear-to-t from-black/95 via-black/65 to-black/25"
-            aria-hidden="true"
-          />
-          <div class="flex w-full flex-col justify-end">
-            <div class="flex items-end justify-between gap-6">
-              <div class="max-w-2xl">
-                <>
-                  <h3 class="text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl">
-                    {featured.data.title}
-                  </h3>
-                  <p class="mt-4 line-clamp-2 max-w-xl text-sm leading-7 text-white/75">{featured.data.description}</p>
-                  <span class="mt-6 inline-flex items-center gap-2 text-sm">
-                    {labels.readPost}
-                    <ArrowRight class="size-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
-                  </span>
-                </>
-              </div>
-              <ArrowUpRight class="hidden size-8 shrink-0 opacity-60 sm:block" aria-hidden="true" />
-            </div>
-          </div>
-        </a>
-        {recent.length > 0 && (
-          <ul class="mt-8 grid gap-7 sm:grid-cols-2 lg:grid-cols-3">
-            {recent.map((post) => (
-              <PostListItem post={post} locale={locale} compact />
-            ))}
-          </ul>
-        )}
-      </>
-    ) : (
-      <p class="empty-state">{labels.noPosts}</p>
+      </nav>
     )}
   </section>
-
-  <section aria-labelledby="projects-title" class="mt-14 border-t pt-8 sm:mt-20 sm:pt-10">
-    <div class="mb-6 flex flex-wrap items-center justify-between gap-2">
-      <h2 id="projects-title" class="text-xl font-semibold tracking-tight">
-        {labels.projects}
-        <span class="text-muted-foreground ml-3 font-mono text-xs font-normal">/ projects</span>
-      </h2>
-      <a href={projectsPath(locale)} class="text-link">
-        {labels.allProjects}
-        <ArrowRight class="size-4" aria-hidden="true" />
-      </a>
-    </div>
-    <ProjectList>
-      {projects.map((project) => (
-        <ProjectListItem project={project} locale={locale} headingTag="h3" />
-      ))}
-    </ProjectList>
-  </section>
+  <RecentPosts posts={posts} locale={locale} />
 </main>
+
+<style>
+  .home-hero {
+    --header-height: 3.5rem;
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    min-height: calc(100svh - var(--header-height));
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
+    justify-items: center;
+    gap: 2rem;
+    overflow-x: clip;
+    padding-block: 1rem calc(1rem + var(--header-height));
+    padding-inline: clamp(1rem, 5vw, 3rem);
+  }
+
+  .home-topics {
+    display: grid;
+    width: min(100%, 68rem);
+    align-self: end;
+    gap: 0.75rem;
+    margin-bottom: calc(-1 * var(--header-height));
+  }
+
+  h1 {
+    width: 100%;
+  }
+
+  svg {
+    width: 100%;
+    fill: currentColor;
+    font-size: 160px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+</style>

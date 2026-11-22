@@ -34,7 +34,7 @@ export const GET: APIRoute = async ({ site }) => {
     getCollection('topics'),
     getCollection('series'),
   ]);
-  const usedTopicIds = new Set(posts.flatMap((post) => post.data.topics.map((topic) => topic.id)));
+  const usedTopicIds = new Set(posts.flatMap((post) => (post.data.topics ?? []).map((topic) => topic.id)));
   const usedSeriesIds = new Set(posts.flatMap((post) => (post.data.series ? [post.data.series.id] : [])));
 
   // Use localized URLs instead of the duplicate / and /projects pages.

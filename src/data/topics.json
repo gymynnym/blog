@@ -19,10 +19,6 @@
     "slug": "react",
     "name": "React"
   },
-  "uncategorized": {
-    "slug": "uncategorized",
-    "name": "Uncategorized"
-  },
   "nextjs": {
     "slug": "nextjs",
     "name": "Next.js"

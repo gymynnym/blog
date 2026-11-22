@@ -1,0 +1,72 @@
+<div class="hero-background" aria-hidden="true">
+  <span class="ribbon ribbon-arch"></span>
+  <span class="ribbon ribbon-trough"></span>
+</div>
+
+<style>
+  .hero-background {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    overflow: clip;
+    pointer-events: none;
+    mask-image: linear-gradient(to bottom, transparent, #000 20% 70%, transparent 96%);
+  }
+
+  .ribbon {
+    --curve: ellipse 60% 77% at 50% 88%;
+    --fill: color-mix(in oklab, var(--foreground) var(--fill-opacity), transparent);
+    --line: color-mix(in oklab, var(--foreground) var(--line-opacity), transparent);
+    position: absolute;
+    top: var(--ribbon-top);
+    left: var(--ribbon-left);
+    width: max(140%, 50rem);
+    height: 84%;
+    background:
+      repeating-radial-gradient(var(--curve), transparent 0 2.1%, var(--line) 2.3%, transparent 2.5% 2.8%),
+      radial-gradient(var(--curve), transparent 37%, var(--fill) 58%, transparent 76%);
+    mask-image:
+      radial-gradient(var(--curve), transparent 42%, #000 58% 64%, transparent 78%),
+      linear-gradient(to bottom, transparent, #000 13% 85%, transparent);
+    mask-composite: intersect;
+    transform: translate(-50%, -50%) rotate(var(--angle));
+  }
+
+  .ribbon-arch {
+    --ribbon-top: 48%;
+    --ribbon-left: 36%;
+    --fill-opacity: 19%;
+    --line-opacity: 18%;
+    --angle: -24deg;
+    --turn: 8deg;
+    --travel-x: -36%;
+    --travel-y: -34%;
+  }
+
+  .ribbon-trough {
+    --ribbon-top: 54%;
+    --ribbon-left: 64%;
+    --fill-opacity: 13%;
+    --line-opacity: 15%;
+    --angle: 194deg;
+    --turn: 164deg;
+    --travel-x: -64%;
+    --travel-y: -62%;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .ribbon-arch {
+      animation: ribbon-flow 7s ease-in-out -2s infinite alternate;
+    }
+
+    .ribbon-trough {
+      animation: ribbon-flow 9s ease-in-out -3s infinite alternate;
+    }
+  }
+
+  @keyframes ribbon-flow {
+    to {
+      transform: translate(var(--travel-x), var(--travel-y)) rotate(var(--turn));
+    }
+  }
+</style>

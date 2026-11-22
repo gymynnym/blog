@@ -41,24 +41,22 @@ const currentSection = navLinks.find(
       </a>
     </div>
     <nav class="ml-auto flex h-full items-center gap-5 text-sm sm:gap-7" aria-label="Main">
-      {
-        navLinks.map(({ name, href }) => (
-          <a
-            href={href}
-            aria-current={currentSection === name ? 'page' : undefined}
-            class:list={[
-              'hover:text-foreground relative flex h-14 items-center transition-colors',
-              currentSection === name ? 'text-foreground' : 'text-muted-foreground',
-              {
-                'after:bg-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-px': currentSection === name,
-              },
-            ]}
-          >
-            {name}
-          </a>
-        ))
-      }
-      <details class="relative">
+      {navLinks.map(({ name, href }) => (
+        <a
+          href={href}
+          aria-current={currentSection === name ? 'page' : undefined}
+          class:list={[
+            'hover:text-foreground relative flex h-14 items-center transition-colors',
+            currentSection === name ? 'text-foreground' : 'text-muted-foreground',
+            {
+              'after:bg-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-px': currentSection === name,
+            },
+          ]}
+        >
+          {name}
+        </a>
+      ))}
+      <details class="relative" data-header-menu>
         <summary
           class="hover:bg-muted flex h-7 cursor-pointer list-none items-center gap-1 rounded-sm px-1 text-xs uppercase transition-colors"
           aria-label={ui[locale].languages}
@@ -68,25 +66,23 @@ const currentSection = navLinks.find(
           <ChevronDown class="text-muted-foreground size-3" aria-hidden="true" />
         </summary>
         <ul class="bg-background absolute top-full right-0 z-10 mt-2 min-w-24 rounded-md border p-1 shadow-lg">
-          {
-            locales.map((language) => (
-              <li>
-                <a
-                  href={languageTargets[language]}
-                  data-language-link
-                  aria-current={language === locale ? 'page' : undefined}
-                  class:list={[
-                    'hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs uppercase transition-colors',
-                    { 'font-semibold': language === locale },
-                  ]}
-                >
-                  <Image src={flagIcons[language]} alt="" class="size-4 object-cover" />
-                  {language}
-                  {language === locale && <Check class="ml-auto size-3.5" aria-hidden="true" />}
-                </a>
-              </li>
-            ))
-          }
+          {locales.map((language) => (
+            <li>
+              <a
+                href={languageTargets[language]}
+                data-language-link
+                aria-current={language === locale ? 'page' : undefined}
+                class:list={[
+                  'hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs uppercase transition-colors',
+                  { 'font-semibold': language === locale },
+                ]}
+              >
+                <Image src={flagIcons[language]} alt="" class="size-4 object-cover" />
+                {language}
+                {language === locale && <Check class="ml-auto size-3.5" aria-hidden="true" />}
+              </a>
+            </li>
+          ))}
         </ul>
       </details>
     </nav>
@@ -94,9 +90,9 @@ const currentSection = navLinks.find(
 </header>
 
 <script>
-  const menu = document.querySelector<HTMLDetailsElement>('header details');
+  const menu = document.querySelector<HTMLDetailsElement>('header [data-header-menu]');
   document.addEventListener('click', (event) => {
-    if (event.target instanceof Node && !menu?.contains(event.target)) menu?.removeAttribute('open');
+    if (menu && event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && menu?.open) {

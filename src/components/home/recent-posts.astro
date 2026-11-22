@@ -1,0 +1,252 @@
+---
+import TopicBadge from '@/components/topics/badge.astro';
+import { formatDate, ui, type Locale } from '@/lib/i18n';
+import { postRoute, type Post } from '@/lib/posts';
+import { postPath, postsPath } from '@/lib/routes';
+import { resolveTopics } from '@/lib/topics';
+
+interface Props {
+  locale: Locale;
+  posts: Post[];
+}
+
+const { locale, posts } = Astro.props;
+const labels = ui[locale];
+const entries = await Promise.all(
+  posts.slice(0, 6).map(async (post) => {
+    const topics = await resolveTopics(post.data.topics);
+    return { ...post.data, topics, href: postPath(locale, postRoute(post).slug) };
+  }),
+);
+---
+
+<section class="border-t" aria-labelledby="recent-posts">
+  <div class="posts-section">
+    <div class="section-heading">
+      <h2 id="recent-posts">{labels.latestPosts}</h2>
+      <a href={postsPath(locale)}>{labels.allPosts}</a>
+    </div>
+
+    {entries.length ? (
+      <ol class="magazine">
+        {entries.map(({ title, description, thumbnail, publishedAt, topics, href }, index) => (
+          <li class:list={['entry', { lead: index === 0 }]}>
+            <div class="thumbnail">{thumbnail && <img src={thumbnail} alt="" loading="lazy" decoding="async" />}</div>
+            <div class="post-meta">
+              <time datetime={publishedAt.toISOString()}>{formatDate(publishedAt, locale)}</time>
+              {topics.length > 0 && (
+                <div class="post-topics">
+                  {topics.map((topic) => (
+                    <TopicBadge locale={locale} topic={topic} tab="posts" />
+                  ))}
+                </div>
+              )}
+            </div>
+            <div class="post-text">
+              <h3>
+                <a class="post-link" href={href}>
+                  {title}
+                </a>
+              </h3>
+              {index === 0 && <p>{description}</p>}
+            </div>
+          </li>
+        ))}
+      </ol>
+    ) : (
+      <p class="empty-state">{labels.noPosts}</p>
+    )}
+  </div>
+</section>
+
+<style>
+  .posts-section {
+    width: 100%;
+    max-width: 72rem;
+    margin-inline: auto;
+    padding: clamp(2.5rem, 6vw, 4.5rem) clamp(1.5rem, 4vw, 2rem) clamp(4rem, 8vw, 7rem);
+  }
+
+  .section-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+  }
+
+  .section-heading h2 {
+    font-size: clamp(2rem, 4.5vw, 3.5rem);
+    font-weight: 700;
+    line-height: 1.06;
+    letter-spacing: -0.045em;
+  }
+
+  .section-heading a {
+    padding-block: 0.5rem;
+    text-decoration: underline;
+    text-decoration-color: var(--border);
+    text-underline-offset: 0.3em;
+  }
+
+  .section-heading a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  .entry {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    align-content: start;
+  }
+
+  .post-link::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+  }
+
+  .thumbnail {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--muted);
+    aspect-ratio: 16 / 9;
+  }
+
+  .thumbnail img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: scale 200ms ease-out;
+  }
+
+  .entry:has(.post-link:hover) img {
+    scale: 1.025;
+  }
+
+  .post-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.625rem;
+    align-items: center;
+    color: var(--muted-foreground);
+    font-size: 0.8125rem;
+  }
+
+  .post-topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .post-topics > :global(a) {
+    position: relative;
+    z-index: 1;
+  }
+
+  .post-text :is(h3, p) {
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+  }
+
+  .post-text h3 {
+    font-size: 1.0625rem;
+    font-weight: 650;
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+    text-wrap: pretty;
+  }
+
+  .post-link:hover {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.19em;
+  }
+
+  .post-text p {
+    display: -webkit-box;
+    overflow: hidden;
+    margin-top: 0.5rem;
+    color: var(--muted-foreground);
+    max-width: 56ch;
+    font-size: 1rem;
+    line-height: 1.5;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  :is(.post-link, .section-heading a):focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 4px;
+  }
+
+  .magazine {
+    display: grid;
+    align-content: start;
+  }
+
+  .lead {
+    margin-bottom: 1.25rem;
+    gap: 0.75rem;
+  }
+
+  .magazine .lead h3 {
+    font-size: clamp(1.75rem, 3.5vw, 2.625rem);
+  }
+
+  .entry:not(.lead) {
+    padding-block: 0.75rem;
+    border-top: 1px solid var(--border);
+    grid-template-columns: minmax(5rem, 24%) minmax(0, 1fr);
+    grid-template-areas: 'media meta' 'media title';
+    align-content: start;
+    align-items: center;
+    gap: 0.125rem 0.875rem;
+  }
+
+  .magazine .entry:not(.lead) .thumbnail {
+    grid-area: media;
+  }
+
+  .magazine .entry:not(.lead) .post-meta {
+    grid-area: meta;
+    align-self: end;
+  }
+
+  .magazine .entry:not(.lead) .post-text {
+    grid-area: title;
+    align-self: start;
+  }
+
+  @media (min-width: 56rem) {
+    .magazine {
+      grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+      grid-template-rows: repeat(5, auto);
+      column-gap: clamp(2rem, 4vw, 3.25rem);
+    }
+
+    .magazine .lead {
+      grid-column: 1;
+      grid-row: 1 / -1;
+      margin-bottom: 0;
+    }
+
+    .magazine .entry:not(.lead) {
+      grid-column: 2;
+    }
+
+    .magazine .entry:nth-child(2) {
+      padding-top: 0;
+      border-top: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .thumbnail img {
+      transition: none;
+    }
+  }
+</style>

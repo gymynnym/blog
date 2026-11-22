@@ -39,7 +39,7 @@ const posts = defineCollection({
       thumbnail: z.url().optional(),
       publishedAt: postDate,
       updatedAt: postDate.optional(),
-      topics: z.array(reference('topics')).min(1),
+      topics: z.array(reference('topics')).min(1).nullable().default(null),
       series: reference('series').optional(),
       seriesOrder: z.number().int().positive().optional(),
       draft: z.boolean().default(false),

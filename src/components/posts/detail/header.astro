@@ -46,7 +46,11 @@ const labels = ui[locale];
   }
   <h1 class="text-4xl font-semibold text-balance sm:text-6xl">{post.data.title}</h1>
   <p class="max-w-2xl text-balance opacity-85">{post.data.description}</p>
-  <div class="flex flex-wrap items-center justify-center gap-1.5 text-sm">
-    {topics.map((topic) => <TopicBadge topic={topic} locale={locale} tab="posts" variant="overlay" />)}
-  </div>
+  {topics.length > 0 && (
+    <div class="flex flex-wrap items-center justify-center gap-1.5 text-sm">
+      {topics.map((topic) => (
+        <TopicBadge topic={topic} locale={locale} tab="posts" variant="overlay" />
+      ))}
+    </div>
+  )}
 </header>
